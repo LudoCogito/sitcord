@@ -1,6 +1,11 @@
 import ElectronStore from 'electron-store'
 import type { Store, UsageEntry } from './ranking'
 
+// electron-store v11 is ESM-only; when bundled to CJS for the main process,
+// the default export sometimes arrives wrapped as `{ default: Store }` rather
+// than interop-unwrapped. Handle both shapes.
+const Conf = (ElectronStore as unknown as { default?: typeof ElectronStore }).default ?? ElectronStore
+
 export interface AuthData {
   accessToken: string
   expiresAt: number
@@ -22,7 +27,7 @@ export class AppStore {
   private store: ElectronStore<AppData>
 
   constructor() {
-    this.store = new ElectronStore<AppData>({ defaults })
+    this.store = new Conf<AppData>({ defaults })
   }
 
   get(): Store {
