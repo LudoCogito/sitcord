@@ -2,7 +2,25 @@ import './styles.css'
 import { buildView, type Row } from './render'
 import { navigate } from './navigation'
 import { startGamepadLoop, startKeyboardFallback, type InputAction } from './gamepad'
+import { adjustScale } from './scale'
 import type { AppState } from '../shared/ipc'
+
+// Root font size at scale 1.0; the rem-based stylesheet scales off this so the
+// whole UI grows/shrinks together for 10-foot/Big Picture viewing.
+const BASE_FONT_PX = 22
+const SCALE_STORAGE_KEY = 'uiScale'
+
+function loadScale(): number {
+  const stored = Number(localStorage.getItem(SCALE_STORAGE_KEY))
+  return Number.isFinite(stored) && stored > 0 ? stored : 1
+}
+
+let scale = loadScale()
+
+function applyScale(): void {
+  document.documentElement.style.fontSize = `${BASE_FONT_PX * scale}px`
+  localStorage.setItem(SCALE_STORAGE_KEY, String(scale))
+}
 
 let state: AppState = {
   status: 'connecting',
@@ -65,14 +83,21 @@ function render(): void {
 
   const list = document.createElement('div')
   list.className = 'channel-list'
+  let selectedEl: HTMLElement | null = null
   for (const row of buildView(state, selectionIndex)) {
-    list.appendChild(renderRow(row))
+    const el = renderRow(row)
+    if (row.kind === 'channel' && row.isSelected) selectedEl = el
+    list.appendChild(el)
   }
   app.appendChild(list)
 
+  // Keep the highlighted channel visible while navigating a long list with big
+  // rows — essential for couch/controller use where only a few rows fit.
+  selectedEl?.scrollIntoView({ block: 'nearest' })
+
   const legend = document.createElement('div')
   legend.className = 'legend'
-  legend.textContent = 'A Join · B Disconnect · X Mute · Y Deafen · Start Favorite'
+  legend.textContent = 'A Join · B Disconnect · X Mute · Y Deafen · Start Favorite · LT/RT Zoom'
   app.appendChild(legend)
 }
 
@@ -113,6 +138,10 @@ function handleAction(action: InputAction): void {
     case 'toggleVisibility':
       void window.api.toggleVisibility()
       break
+    case 'zoom':
+      scale = adjustScale(scale, action.direction)
+      applyScale()
+      break
   }
 }
 
@@ -124,4 +153,5 @@ window.api.onStateUpdate((next) => {
 startGamepadLoop(handleAction)
 startKeyboardFallback(handleAction)
 
+applyScale()
 render()

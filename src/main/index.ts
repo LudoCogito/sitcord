@@ -28,8 +28,8 @@ function createWindow(store: AppStore): BrowserWindow {
   const bounds = store.getWindowBounds()
 
   const mainWindow = new BrowserWindow({
-    width: bounds?.width ?? 380,
-    height: bounds?.height ?? 640,
+    width: bounds?.width ?? 460,
+    height: bounds?.height ?? 760,
     x: bounds?.x,
     y: bounds?.y,
     show: false,

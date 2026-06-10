@@ -1,4 +1,8 @@
 :root {
+  /* font-size is set at runtime (main.ts BASE_FONT_PX * scale); this is the
+     fallback. The whole UI is sized in rem so one knob scales it for 10-foot
+     viewing. */
+  font-size: 22px;
   color-scheme: dark;
   --bg: #1e1f22;
   --bg-alt: #2b2d31;
@@ -24,7 +28,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 14px;
+  font-size: 1rem;
   user-select: none;
 }
 
@@ -35,13 +39,14 @@ body {
 }
 
 .status {
-  padding: 6px 10px;
-  font-size: 11px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.6rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--fg-muted);
   border-bottom: 1px solid var(--bg-alt);
+  flex: 0 0 auto;
 }
 
 .status--connected {
@@ -57,17 +62,17 @@ body {
 }
 
 .channel-list {
-  flex: 1;
+  flex: 1 1 auto;
   overflow-y: auto;
-  padding: 4px 0;
+  padding: 0.3rem 0;
 }
 
 .group-header {
-  padding: 8px 10px 4px;
-  font-size: 11px;
+  padding: 0.7rem 0.7rem 0.3rem;
+  font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--fg-muted);
 }
 
@@ -75,14 +80,22 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 10px;
-  margin: 0 4px;
-  border-radius: 4px;
+  gap: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  margin: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  line-height: 1.2;
 }
 
 .channel-row.selected {
   background: var(--accent);
   color: #fff;
+}
+
+.channel-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .channel-row.current .channel-name {
@@ -102,8 +115,9 @@ body {
 .channel-occupancy {
   font-variant-numeric: tabular-nums;
   color: var(--fg-muted);
-  min-width: 1.5em;
+  min-width: 1.4em;
   text-align: right;
+  flex: 0 0 auto;
 }
 
 .channel-row.selected .channel-occupancy {
@@ -111,8 +125,9 @@ body {
 }
 
 .legend {
-  padding: 6px 10px;
-  font-size: 11px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.55rem;
   color: var(--fg-muted);
   border-top: 1px solid var(--bg-alt);
+  flex: 0 0 auto;
 }
