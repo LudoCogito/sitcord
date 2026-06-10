@@ -1,5 +1,7 @@
 import './styles.css'
 import { buildView, type Row } from './render'
+import { navigate } from './navigation'
+import { startGamepadLoop, startKeyboardFallback, type InputAction } from './gamepad'
 import type { AppState } from '../shared/ipc'
 
 let state: AppState = {
@@ -74,9 +76,52 @@ function render(): void {
   app.appendChild(legend)
 }
 
+function selectedChannelId(): string | null {
+  const row = buildView(state, selectionIndex).find(
+    (r): r is Row & { kind: 'channel' } => r.kind === 'channel' && r.isSelected
+  )
+  return row?.channelId ?? null
+}
+
+function handleAction(action: InputAction): void {
+  switch (action.type) {
+    case 'nav': {
+      const rows = buildView(state, selectionIndex)
+      selectionIndex = navigate({ rows, selectionIndex }, action.action).selectionIndex
+      render()
+      break
+    }
+    case 'join': {
+      const channelId = selectedChannelId()
+      if (channelId) void window.api.join(channelId)
+      break
+    }
+    case 'disconnect':
+      void window.api.disconnect()
+      break
+    case 'toggleMute':
+      void window.api.setMute(!state.muted)
+      break
+    case 'toggleDeafen':
+      void window.api.setDeafen(!state.deafened)
+      break
+    case 'toggleFavorite': {
+      const channelId = selectedChannelId()
+      if (channelId) void window.api.toggleFavorite(channelId)
+      break
+    }
+    case 'toggleVisibility':
+      void window.api.toggleVisibility()
+      break
+  }
+}
+
 window.api.onStateUpdate((next) => {
   state = next
   render()
 })
+
+startGamepadLoop(handleAction)
+startKeyboardFallback(handleAction)
 
 render()

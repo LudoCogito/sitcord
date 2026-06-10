@@ -19,6 +19,9 @@ const api = {
   },
   toggleFavorite(channelId: string): Promise<void> {
     return ipcRenderer.invoke(IPC.FAVORITE_TOGGLE, channelId)
+  },
+  toggleVisibility(): Promise<void> {
+    return ipcRenderer.invoke(IPC.WINDOW_TOGGLE)
   }
 }
 

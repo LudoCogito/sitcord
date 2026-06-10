@@ -18,5 +18,6 @@ export const IPC = {
   VOICE_DISCONNECT: 'voice:disconnect',
   VOICE_SET_MUTE: 'voice:setMute',
   VOICE_SET_DEAFEN: 'voice:setDeafen',
-  FAVORITE_TOGGLE: 'favorite:toggle'
+  FAVORITE_TOGGLE: 'favorite:toggle',
+  WINDOW_TOGGLE: 'window:toggle'
 } as const

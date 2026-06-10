@@ -60,6 +60,13 @@ function startService(mainWindow: BrowserWindow): DiscordService {
   ipcMain.handle(IPC.VOICE_SET_MUTE, (_event, muted: boolean) => service.setMute(muted))
   ipcMain.handle(IPC.VOICE_SET_DEAFEN, (_event, deafened: boolean) => service.setDeafen(deafened))
   ipcMain.handle(IPC.FAVORITE_TOGGLE, (_event, channelId: string) => service.toggleFavorite(channelId))
+  ipcMain.handle(IPC.WINDOW_TOGGLE, () => {
+    if (mainWindow.isVisible()) {
+      mainWindow.hide()
+    } else {
+      mainWindow.show()
+    }
+  })
 
   return service
 }
