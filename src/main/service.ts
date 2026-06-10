@@ -41,6 +41,7 @@ export class DiscordService {
   private muted = false
   private deafened = false
   private occupancyTimer: ReturnType<typeof setTimeout> | null = null
+  private resolveFirstSetup: (() => void) | null = null
 
   constructor(options: DiscordServiceOptions) {
     this.rpc = options.rpc
@@ -54,15 +55,51 @@ export class DiscordService {
       clientSecret: options.clientSecret
     })
     this.rpc.on('event', (data: any) => this.handleEvent(data))
+    this.rpc.on('disconnect', () => this.onDisconnect())
   }
 
   async start(): Promise<void> {
-    await this.connectAndAuthenticate()
+    // Session setup is driven by the READY dispatch (see handleEvent ->
+    // onReady), so it re-runs automatically whenever the rpc client
+    // reconnects. start() resolves once the first setup attempt settles.
+    const firstSetup = new Promise<void>((resolve) => {
+      this.resolveFirstSetup = resolve
+    })
+    try {
+      await this.rpc.connect()
+    } catch {
+      this.status = 'disconnected'
+      this.pushState()
+      return
+    }
+    await firstSetup
+  }
+
+  private async onReady(): Promise<void> {
+    try {
+      await this.setupSession()
+    } catch {
+      this.status = 'disconnected'
+      this.pushState()
+    } finally {
+      this.resolveFirstSetup?.()
+      this.resolveFirstSetup = null
+    }
+  }
+
+  private async setupSession(): Promise<void> {
+    await this.auth.authenticate(this.now())
     await this.loadChannels()
-    await this.subscribeToVoiceEvents()
     await this.refreshCurrentChannel()
+    await this.refreshVoiceSettings()
+    await this.subscribeToVoiceEvents()
     await this.refreshOccupancy()
     this.status = 'connected'
+    this.pushState()
+  }
+
+  private onDisconnect(): void {
+    this.status = 'disconnected'
     this.pushState()
   }
 
@@ -98,37 +135,35 @@ export class DiscordService {
     this.pushState()
   }
 
-  private async connectAndAuthenticate(): Promise<void> {
-    const ready = new Promise<void>((resolve) => {
-      const onEvent = (data: any): void => {
-        if (data?.evt === 'READY') {
-          this.rpc.off('event', onEvent)
-          resolve()
-        }
-      }
-      this.rpc.on('event', onEvent)
-    })
-    await this.rpc.connect()
-    await ready
-    await this.auth.authenticate(this.now())
-  }
-
   private async loadChannels(): Promise<void> {
     const guildsRes = await this.rpc.request('GET_GUILDS', {})
-    const channels: VoiceChannel[] = []
-    for (const guild of guildsRes.data.guilds) {
-      const channelsRes = await this.rpc.request('GET_CHANNELS', { guild_id: guild.id })
-      for (const channel of channelsRes.data.channels) {
-        if (VOICE_CHANNEL_TYPES.has(channel.type)) {
-          channels.push({ id: channel.id, guildId: guild.id, guildName: guild.name, name: channel.name })
+    const guilds: any[] = guildsRes.data?.guilds ?? []
+    // Fan out per-guild channel fetches concurrently; isolate failures so one
+    // guild we can't read doesn't wipe out the whole channel list.
+    const perGuild = await Promise.all(
+      guilds.map(async (guild) => {
+        try {
+          const channelsRes = await this.rpc.request('GET_CHANNELS', { guild_id: guild.id })
+          const channels: any[] = channelsRes.data?.channels ?? []
+          return channels
+            .filter((channel) => VOICE_CHANNEL_TYPES.has(channel.type))
+            .map((channel): VoiceChannel => ({
+              id: channel.id,
+              guildId: guild.id,
+              guildName: guild.name,
+              name: channel.name
+            }))
+        } catch {
+          return [] as VoiceChannel[]
         }
-      }
-    }
-    this.channels = channels
+      })
+    )
+    this.channels = perGuild.flat()
   }
 
   private async subscribeToVoiceEvents(): Promise<void> {
     await this.rpc.subscribe('VOICE_CHANNEL_SELECT')
+    await this.rpc.subscribe('VOICE_SETTINGS_UPDATE')
     for (const channel of this.channels) {
       await this.rpc.subscribe('VOICE_STATE_CREATE', { channel_id: channel.id })
       await this.rpc.subscribe('VOICE_STATE_UPDATE', { channel_id: channel.id })
@@ -141,19 +176,46 @@ export class DiscordService {
     this.currentChannelId = res.data?.id ?? null
   }
 
-  private async refreshOccupancy(): Promise<void> {
-    const occupancy: Record<string, number> = {}
-    for (const channel of this.channels) {
-      const res = await this.rpc.request('GET_CHANNEL', { channel_id: channel.id })
-      occupancy[channel.id] = res.data?.voice_states?.length ?? 0
+  private async refreshVoiceSettings(): Promise<void> {
+    try {
+      const res = await this.rpc.request('GET_VOICE_SETTINGS', {})
+      this.muted = res?.data?.mute ?? false
+      this.deafened = res?.data?.deaf ?? false
+    } catch {
+      // leave the last-known mute/deafen values in place
     }
-    this.occupancy = occupancy
+  }
+
+  private async refreshOccupancy(): Promise<void> {
+    // Fan out the per-channel occupancy fetches concurrently; on a failure for
+    // one channel keep its previous count rather than dropping the whole map.
+    const entries = await Promise.all(
+      this.channels.map(async (channel): Promise<[string, number]> => {
+        try {
+          const res = await this.rpc.request('GET_CHANNEL', { channel_id: channel.id })
+          return [channel.id, res.data?.voice_states?.length ?? 0]
+        } catch {
+          return [channel.id, this.occupancy[channel.id] ?? 0]
+        }
+      })
+    )
+    this.occupancy = Object.fromEntries(entries)
   }
 
   private handleEvent(data: any): void {
+    if (data?.evt === 'READY') {
+      void this.onReady()
+      return
+    }
     if (data?.evt === 'VOICE_CHANNEL_SELECT') {
       this.currentChannelId = data.data?.channel_id ?? null
       this.scheduleOccupancyRefresh()
+      return
+    }
+    if (data?.evt === 'VOICE_SETTINGS_UPDATE') {
+      this.muted = data.data?.mute ?? this.muted
+      this.deafened = data.data?.deaf ?? this.deafened
+      this.pushState()
       return
     }
     if (

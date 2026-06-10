@@ -146,6 +146,34 @@ describe('DiscordRpcClient', () => {
     expect(transports).toHaveLength(2)
   })
 
+  it('emits "disconnect" when an established transport closes unexpectedly', async () => {
+    vi.useFakeTimers()
+    const transport = new FakeTransport()
+    const client = new DiscordRpcClient({ clientId: 'abc123', transport: async () => transport })
+    await client.connect()
+
+    const disconnects: number[] = []
+    client.on('disconnect', () => disconnects.push(1))
+
+    transport.emit('close')
+
+    expect(disconnects).toHaveLength(1)
+  })
+
+  it('does not emit "disconnect" when close() was called intentionally', async () => {
+    const transport = new FakeTransport()
+    const client = new DiscordRpcClient({ clientId: 'abc123', transport: async () => transport })
+    await client.connect()
+
+    const disconnects: number[] = []
+    client.on('disconnect', () => disconnects.push(1))
+
+    client.close()
+    transport.emit('close')
+
+    expect(disconnects).toHaveLength(0)
+  })
+
   it('rejects pending requests when the transport closes', async () => {
     const transport = new FakeTransport()
     const client = new DiscordRpcClient({ clientId: 'abc123', transport: async () => transport })

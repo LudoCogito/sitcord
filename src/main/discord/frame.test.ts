@@ -29,4 +29,17 @@ describe('decodeFrames', () => {
     expect(messages.length).toBe(0)
     expect(rest.length).toBe(full.length - 3)
   })
+  it('skips a frame with an unparseable payload instead of throwing, decoding later frames', () => {
+    const garbage = Buffer.from('not json', 'utf8')
+    const header = Buffer.alloc(8)
+    header.writeInt32LE(OP.FRAME, 0)
+    header.writeInt32LE(garbage.length, 4)
+    const corrupt = Buffer.concat([header, garbage])
+    const valid = encodeFrame(OP.PING, { b: 2 })
+
+    const { messages, rest } = decodeFrames(Buffer.concat([corrupt, valid]))
+
+    expect(messages).toEqual([{ op: OP.PING, data: { b: 2 } }])
+    expect(rest.length).toBe(0)
+  })
 })

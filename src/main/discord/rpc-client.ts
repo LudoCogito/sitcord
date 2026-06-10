@@ -100,6 +100,7 @@ export class DiscordRpcClient extends EventEmitter {
     this.pending.clear()
 
     if (this.stopped) return
+    this.emit('disconnect')
     const delay = this.reconnectDelay
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY_MS)
     setTimeout(() => {

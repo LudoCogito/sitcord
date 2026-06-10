@@ -69,6 +69,7 @@ const responses = {
     }
   },
   GET_SELECTED_VOICE_CHANNEL: { data: null },
+  GET_VOICE_SETTINGS: { data: { mute: false, deaf: false } },
   GET_CHANNEL: (args: { channel_id: string }) => ({
     data: { voice_states: args.channel_id === 'c1' ? [{ user: { id: 'u1' } }] : [] }
   }),
@@ -105,11 +106,13 @@ describe('DiscordService', () => {
       'GET_GUILDS',
       'GET_CHANNELS',
       'GET_SELECTED_VOICE_CHANNEL',
+      'GET_VOICE_SETTINGS',
       'GET_CHANNEL',
       'GET_CHANNEL'
     ])
     expect(rpc.subscriptions.map((s) => s.evt)).toEqual([
       'VOICE_CHANNEL_SELECT',
+      'VOICE_SETTINGS_UPDATE',
       'VOICE_STATE_CREATE',
       'VOICE_STATE_UPDATE',
       'VOICE_STATE_DELETE',
@@ -161,6 +164,58 @@ describe('DiscordService', () => {
 
     expect(store.get().favorites).toEqual(['c1'])
     expect(states.at(-1)?.groups[0].channels[0].id).toBe('c1')
+  })
+
+  it('re-authenticates and re-subscribes when a fresh READY arrives after a reconnect', async () => {
+    const states: AppState[] = []
+    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const { service, rpc } = makeService(states, store)
+    await service.start()
+
+    expect(rpc.calls.filter((c) => c.cmd === 'AUTHENTICATE')).toHaveLength(1)
+    const subsAfterStart = rpc.subscriptions.length
+
+    rpc.emit('event', { cmd: 'DISPATCH', evt: 'READY', data: {}, nonce: null })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(rpc.calls.filter((c) => c.cmd === 'AUTHENTICATE')).toHaveLength(2)
+    expect(rpc.subscriptions.length).toBe(subsAfterStart * 2)
+    expect(states.at(-1)?.status).toBe('connected')
+  })
+
+  it("sets status to 'disconnected' and pushes state when the rpc connection drops", async () => {
+    const states: AppState[] = []
+    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const { service, rpc } = makeService(states, store)
+    await service.start()
+    expect(states.at(-1)?.status).toBe('connected')
+
+    rpc.emit('disconnect')
+
+    expect(states.at(-1)?.status).toBe('disconnected')
+  })
+
+  it('reads initial mute/deafen from Discord and applies VOICE_SETTINGS_UPDATE events', async () => {
+    const states: AppState[] = []
+    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const rpc = new FakeRpc({ ...responses, GET_VOICE_SETTINGS: { data: { mute: true, deaf: false } } })
+    const service = new DiscordService({
+      rpc,
+      store,
+      clientId: 'cid',
+      clientSecret: 'secret',
+      onStateUpdate: (s) => states.push(s),
+      now: () => 0
+    })
+    await service.start()
+
+    expect(states.at(-1)?.muted).toBe(true)
+    expect(states.at(-1)?.deafened).toBe(false)
+
+    rpc.emit('event', { cmd: 'DISPATCH', evt: 'VOICE_SETTINGS_UPDATE', data: { mute: false, deaf: true }, nonce: null })
+
+    expect(states.at(-1)?.muted).toBe(false)
+    expect(states.at(-1)?.deafened).toBe(true)
   })
 
   it('VOICE_CHANNEL_SELECT updates currentChannelId and refreshes occupancy after a debounce', async () => {
