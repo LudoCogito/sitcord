@@ -129,6 +129,39 @@ exchange** endpoint.
 `SELECT_VOICE_CHANNEL` / `SET_VOICE_SETTINGS` work end-to-end against a real
 local Discord client with a self-registered app.
 
+### Findings (Task 0 spike, 2026-06-10)
+
+Run against a real Discord desktop client (macOS) with a self-registered app:
+
+- **Socket discovery**: unix socket found at `$TMPDIR/discord-ipc-0` (macOS).
+- **Handshake**: connects and returns `READY` immediately.
+- **AUTHORIZE**: prompt appears in Discord; approving returns a `code`.
+- **Token exchange**: `POST /api/oauth2/token` with `client_id` +
+  `client_secret` + `code` succeeds; `AUTHENTICATE` with the resulting
+  `access_token` succeeds.
+- **`GET_GUILDS` / `GET_CHANNELS`**: return real guild/channel data; voice
+  channels are reliably identified by `type === 2` (stage `type === 13` not
+  exercised but same filter applies).
+- **`SELECT_VOICE_CHANNEL`**: moved the account into the target channel
+  (visibly, in Discord) and `channel_id: null` disconnected it.
+- **SET_VOICE_SETTINGS**: `{ mute: true }` / `{ mute: false }` both took
+  effect and were reflected in Discord.
+- **PKCE**: on a **fresh, non-authenticated connection**, `AUTHORIZE` with
+  `code_challenge` / `code_challenge_method: "S256"` succeeds, and the token
+  exchange succeeds with `code_verifier` and **no `client_secret`**.
+  - Caveat: calling `AUTHORIZE` again on an *already-authenticated* connection
+    fails with `ERROR 4002 "Already authenticated"` — re-auth requires a new
+    socket connection/handshake, not a second AUTHORIZE on the same one.
+
+**Decision**: use **PKCE** for the distribution auth path (Task 12). No hosted
+token-exchange endpoint is needed — `AuthManager` can do the full flow
+client-side using `code_verifier`/`code_challenge` and omit `client_secret`
+entirely for the distributed build. `client_secret` is only needed for
+personal/tester builds that prefer the simpler non-PKCE flow (or it can be
+dropped in favor of PKCE everywhere).
+
+**GATE PASSED** — proceeding to Task 1.
+
 ## Error handling
 
 - Discord not running / socket absent -> "Discord not detected, retrying" +
