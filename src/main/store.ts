@@ -11,16 +11,25 @@ export interface AuthData {
   expiresAt: number
 }
 
+export interface WindowBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface AppData extends Store {
   settings: Record<string, unknown>
   auth: AuthData | null
+  windowBounds: WindowBounds | null
 }
 
 const defaults: AppData = {
   favorites: [],
   usage: {},
   settings: {},
-  auth: null
+  auth: null,
+  windowBounds: null
 }
 
 export class AppStore {
@@ -48,5 +57,13 @@ export class AppStore {
 
   setAuth(auth: AuthData | null): void {
     this.store.set('auth', auth)
+  }
+
+  getWindowBounds(): WindowBounds | null {
+    return this.store.get('windowBounds')
+  }
+
+  setWindowBounds(bounds: WindowBounds): void {
+    this.store.set('windowBounds', bounds)
   }
 }
