@@ -7,6 +7,7 @@ export interface AppState {
   groups: ServerGroup[]
   currentChannelId: string | null
   occupancy: Record<string, number>
+  favorites: string[]
   muted: boolean
   deafened: boolean
 }

@@ -176,11 +176,13 @@ export class DiscordService {
   }
 
   private pushState(): void {
+    const store = this.store.get()
     this.onStateUpdate({
       status: this.status,
-      groups: rankChannels(this.channels, this.store.get()),
+      groups: rankChannels(this.channels, store),
       currentChannelId: this.currentChannelId,
       occupancy: this.occupancy,
+      favorites: store.favorites,
       muted: this.muted,
       deafened: this.deafened
     })
