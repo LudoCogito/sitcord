@@ -1,4 +1,5 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, Tray } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, shell, Tray } from 'electron'
+import { spawn } from 'node:child_process'
 import { join } from 'path'
 import { DiscordRpcClient } from './discord/rpc-client'
 import { DiscordService } from './service'
@@ -17,12 +18,46 @@ try {
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID ?? ''
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET ?? ''
 
+function showWindow(window: BrowserWindow): void {
+  if (window.isMinimized()) window.restore()
+  window.show()
+  window.focus()
+}
+
 function toggleVisibility(window: BrowserWindow): void {
-  if (window.isVisible()) {
+  // A minimized window still reports isVisible() true, so treat it as "bring it
+  // back" rather than hide.
+  if (window.isVisible() && !window.isMinimized()) {
     window.hide()
   } else {
-    window.show()
-    window.focus()
+    showWindow(window)
+  }
+}
+
+// Best-effort launch of the Discord desktop client. The RPC reconnect loop
+// then connects to it automatically once its IPC socket is up.
+function launchDiscord(): void {
+  try {
+    if (process.platform === 'darwin') {
+      spawn('open', ['-a', 'Discord'], { detached: true, stdio: 'ignore' }).unref()
+    } else if (process.platform === 'win32') {
+      const local = process.env.LOCALAPPDATA
+      if (local) {
+        spawn(join(local, 'Discord', 'Update.exe'), ['--processStart', 'Discord.exe'], {
+          detached: true,
+          stdio: 'ignore'
+        }).unref()
+      } else {
+        void shell.openExternal('discord://')
+      }
+    } else {
+      // Linux: try a Discord on PATH; fall back to the URL scheme handler.
+      const child = spawn('discord', [], { detached: true, stdio: 'ignore' })
+      child.on('error', () => void shell.openExternal('discord://'))
+      child.unref()
+    }
+  } catch {
+    void shell.openExternal('discord://')
   }
 }
 
@@ -106,6 +141,9 @@ function startService(mainWindow: BrowserWindow, store: AppStore): DiscordServic
   ipcMain.handle(IPC.VOICE_SET_DEAFEN, (_event, deafened: boolean) => service.setDeafen(deafened))
   ipcMain.handle(IPC.FAVORITE_TOGGLE, (_event, channelId: string) => service.toggleFavorite(channelId))
   ipcMain.handle(IPC.WINDOW_TOGGLE, () => toggleVisibility(mainWindow))
+  ipcMain.handle(IPC.WINDOW_MINIMIZE, () => mainWindow.minimize())
+  ipcMain.handle(IPC.LAUNCH_DISCORD, () => launchDiscord())
+  ipcMain.handle(IPC.RETRY_CONNECTION, () => service.retry())
 
   return service
 }

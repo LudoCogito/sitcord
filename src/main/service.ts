@@ -7,6 +7,7 @@ import type { AppState, ConnectionStatus } from '../shared/ipc'
 export interface RpcConnection extends EventEmitter, RpcRequester {
   connect(): Promise<void>
   subscribe(evt: string, args?: unknown): Promise<any>
+  reconnectNow(): void
 }
 
 export interface ServiceStore extends AuthStore {
@@ -101,6 +102,13 @@ export class DiscordService {
   private onDisconnect(): void {
     this.status = 'disconnected'
     this.pushState()
+  }
+
+  /** User-triggered "Retry": show connecting and force an immediate reconnect. */
+  retry(): void {
+    this.status = 'connecting'
+    this.pushState()
+    this.rpc.reconnectNow()
   }
 
   async join(channelId: string): Promise<void> {

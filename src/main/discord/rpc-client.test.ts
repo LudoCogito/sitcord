@@ -184,4 +184,81 @@ describe('DiscordRpcClient', () => {
 
     await expect(reqPromise).rejects.toThrow('Disconnected')
   })
+
+  it('retries in the background when the initial connect fails (Discord not running yet)', async () => {
+    vi.useFakeTimers()
+
+    let attempt = 0
+    const transports: FakeTransport[] = []
+    const factory = async (): Promise<FakeTransport> => {
+      attempt++
+      if (attempt === 1) throw new Error('No Discord IPC socket found')
+      const t = new FakeTransport()
+      transports.push(t)
+      return t
+    }
+
+    const client = new DiscordRpcClient({ clientId: 'abc123', transport: factory })
+
+    await expect(client.connect()).rejects.toThrow('No Discord IPC socket found')
+    expect(transports).toHaveLength(0)
+
+    // Discord launches; the backoff timer fires and the next attempt succeeds.
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(transports).toHaveLength(1)
+  })
+
+  it('emits "disconnect" when the initial connect fails', async () => {
+    vi.useFakeTimers()
+    const client = new DiscordRpcClient({
+      clientId: 'abc123',
+      transport: async () => {
+        throw new Error('No Discord IPC socket found')
+      }
+    })
+
+    const disconnects: number[] = []
+    client.on('disconnect', () => disconnects.push(1))
+
+    await expect(client.connect()).rejects.toThrow()
+    expect(disconnects).toHaveLength(1)
+  })
+
+  it('reconnectNow() retries immediately without waiting for the backoff', async () => {
+    vi.useFakeTimers()
+
+    let attempt = 0
+    const transports: FakeTransport[] = []
+    const factory = async (): Promise<FakeTransport> => {
+      attempt++
+      if (attempt === 1) throw new Error('No Discord IPC socket found')
+      const t = new FakeTransport()
+      transports.push(t)
+      return t
+    }
+
+    const client = new DiscordRpcClient({ clientId: 'abc123', transport: factory })
+    await expect(client.connect()).rejects.toThrow()
+
+    client.reconnectNow()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(transports).toHaveLength(1)
+  })
+
+  it('reconnectNow() is a no-op while already connected', async () => {
+    const transport = new FakeTransport()
+    let created = 0
+    const client = new DiscordRpcClient({
+      clientId: 'abc123',
+      transport: async () => {
+        created++
+        return transport
+      }
+    })
+    await client.connect()
+    expect(created).toBe(1)
+
+    client.reconnectNow()
+    expect(created).toBe(1)
+  })
 })

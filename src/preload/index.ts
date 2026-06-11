@@ -22,6 +22,15 @@ const api = {
   },
   toggleVisibility(): Promise<void> {
     return ipcRenderer.invoke(IPC.WINDOW_TOGGLE)
+  },
+  minimize(): Promise<void> {
+    return ipcRenderer.invoke(IPC.WINDOW_MINIMIZE)
+  },
+  launchDiscord(): Promise<void> {
+    return ipcRenderer.invoke(IPC.LAUNCH_DISCORD)
+  },
+  retryConnection(): Promise<void> {
+    return ipcRenderer.invoke(IPC.RETRY_CONNECTION)
   }
 }
 

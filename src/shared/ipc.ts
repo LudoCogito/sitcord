@@ -19,5 +19,8 @@ export const IPC = {
   VOICE_SET_MUTE: 'voice:setMute',
   VOICE_SET_DEAFEN: 'voice:setDeafen',
   FAVORITE_TOGGLE: 'favorite:toggle',
-  WINDOW_TOGGLE: 'window:toggle'
+  WINDOW_TOGGLE: 'window:toggle',
+  WINDOW_MINIMIZE: 'window:minimize',
+  LAUNCH_DISCORD: 'discord:launch',
+  RETRY_CONNECTION: 'discord:retry'
 } as const

@@ -32,9 +32,26 @@ let state: AppState = {
   deafened: false
 }
 let selectionIndex = 0
+let menuIndex = 0
+
+// Shown when there are no channels to list (Discord not connected). These are
+// controller-focusable: UP/DOWN move between them, A activates the highlighted
+// one.
+const MENU_ITEMS: { label: string; run: () => void }[] = [
+  { label: 'Launch Discord', run: () => void window.api.launchDiscord() },
+  { label: 'Retry connection', run: () => void window.api.retryConnection() }
+]
 
 function channelCount(s: AppState): number {
   return s.groups.reduce((sum, group) => sum + group.channels.length, 0)
+}
+
+function isMenuMode(): boolean {
+  return channelCount(state) === 0
+}
+
+function clampMenu(): void {
+  menuIndex = Math.min(Math.max(menuIndex, 0), MENU_ITEMS.length - 1)
 }
 
 function clampSelection(): void {
@@ -68,6 +85,33 @@ function renderRow(row: Row): HTMLElement {
   return el
 }
 
+function renderMenu(): HTMLElement {
+  const wrap = document.createElement('div')
+  wrap.className = 'menu'
+
+  const message = document.createElement('div')
+  message.className = 'menu-message'
+  message.textContent =
+    state.status === 'connecting' ? 'Connecting to Discord…' : "Can't reach Discord"
+  wrap.appendChild(message)
+
+  const hint = document.createElement('div')
+  hint.className = 'menu-hint'
+  hint.textContent = 'Make sure the Discord desktop app is running and signed in.'
+  wrap.appendChild(hint)
+
+  clampMenu()
+  MENU_ITEMS.forEach((item, i) => {
+    const button = document.createElement('div')
+    button.className = 'menu-button'
+    if (i === menuIndex) button.classList.add('selected')
+    button.textContent = item.label
+    wrap.appendChild(button)
+  })
+
+  return wrap
+}
+
 function render(): void {
   clampSelection()
 
@@ -80,6 +124,16 @@ function render(): void {
   status.className = `status status--${state.status}`
   status.textContent = state.status
   app.appendChild(status)
+
+  const legend = document.createElement('div')
+  legend.className = 'legend'
+
+  if (isMenuMode()) {
+    app.appendChild(renderMenu())
+    legend.textContent = 'A Select · LT/RT Zoom · R3 Minimize · Select+Start Show/Hide'
+    app.appendChild(legend)
+    return
+  }
 
   const list = document.createElement('div')
   list.className = 'channel-list'
@@ -95,10 +149,8 @@ function render(): void {
   // rows — essential for couch/controller use where only a few rows fit.
   selectedEl?.scrollIntoView({ block: 'nearest' })
 
-  const legend = document.createElement('div')
-  legend.className = 'legend'
   legend.textContent =
-    'A Join · B Disconnect · X Mute · Y Deafen · Start Favorite · LT/RT Zoom · Select+Start Show/Hide'
+    'A Join · B Disconnect · X Mute · Y Deafen · Start Favorite · LT/RT Zoom · R3 Minimize · Select+Start Show/Hide'
   app.appendChild(legend)
 }
 
@@ -110,6 +162,34 @@ function selectedChannelId(): string | null {
 }
 
 function handleAction(action: InputAction): void {
+  // In menu mode (no channels / not connected) only navigation, activation,
+  // zoom and show/hide apply — the rest need a live Discord connection.
+  if (isMenuMode()) {
+    switch (action.type) {
+      case 'nav':
+        if (action.action === 'UP') menuIndex--
+        else if (action.action === 'DOWN') menuIndex++
+        clampMenu()
+        render()
+        return
+      case 'join':
+        MENU_ITEMS[menuIndex]?.run()
+        return
+      case 'zoom':
+        scale = adjustScale(scale, action.direction)
+        applyScale()
+        return
+      case 'toggleVisibility':
+        void window.api.toggleVisibility()
+        return
+      case 'minimize':
+        void window.api.minimize()
+        return
+      default:
+        return
+    }
+  }
+
   switch (action.type) {
     case 'nav': {
       const rows = buildView(state, selectionIndex)
@@ -138,6 +218,9 @@ function handleAction(action: InputAction): void {
     }
     case 'toggleVisibility':
       void window.api.toggleVisibility()
+      break
+    case 'minimize':
+      void window.api.minimize()
       break
     case 'zoom':
       scale = adjustScale(scale, action.direction)

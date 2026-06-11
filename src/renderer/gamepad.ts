@@ -9,6 +9,7 @@ export type InputAction =
   | { type: 'toggleDeafen' }
   | { type: 'toggleFavorite' }
   | { type: 'toggleVisibility' }
+  | { type: 'minimize' }
   | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
 
 export type InputHandler = (action: InputAction) => void
@@ -28,6 +29,9 @@ const BUTTON_LEFT_TRIGGER = 6
 const BUTTON_RIGHT_TRIGGER = 7
 const BUTTON_SELECT = 8
 const BUTTON_START = 9
+// Right-stick click. The right stick is otherwise unused, so this won't fire by
+// accident while navigating with the left stick.
+const BUTTON_R3 = 11
 
 const AXIS_LEFT_STICK_Y = 1
 
@@ -76,6 +80,7 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
       fireOnPress(gamepad, BUTTON_Y, { type: 'toggleDeafen' })
       fireOnPress(gamepad, BUTTON_LEFT_TRIGGER, { type: 'zoom', direction: 'out' })
       fireOnPress(gamepad, BUTTON_RIGHT_TRIGGER, { type: 'zoom', direction: 'in' })
+      fireOnPress(gamepad, BUTTON_R3, { type: 'minimize' })
 
       // Select+Start chord toggles window visibility (present on every
       // controller, hard to fumble); Start alone = Favorite. stepCombo handles
@@ -115,6 +120,7 @@ const KEY_ACTIONS: Record<string, InputAction> = {
   y: { type: 'toggleDeafen' },
   f: { type: 'toggleFavorite' },
   Tab: { type: 'toggleVisibility' },
+  m: { type: 'minimize' },
   '-': { type: 'zoom', direction: 'out' },
   '=': { type: 'zoom', direction: 'in' },
   '+': { type: 'zoom', direction: 'in' },

@@ -8,6 +8,7 @@ import type { Store as RankingStore, UsageEntry } from './ranking'
 class FakeRpc extends EventEmitter implements RpcConnection {
   calls: { cmd: string; args: unknown }[] = []
   subscriptions: { evt: string; args: unknown }[] = []
+  reconnectNowCalls = 0
 
   constructor(private responses: Record<string, any>) {
     super()
@@ -15,6 +16,10 @@ class FakeRpc extends EventEmitter implements RpcConnection {
 
   async connect(): Promise<void> {
     this.emit('event', { cmd: 'DISPATCH', evt: 'READY', data: {}, nonce: null })
+  }
+
+  reconnectNow(): void {
+    this.reconnectNowCalls++
   }
 
   async request(cmd: string, args: unknown): Promise<any> {
@@ -193,6 +198,18 @@ describe('DiscordService', () => {
     rpc.emit('disconnect')
 
     expect(states.at(-1)?.status).toBe('disconnected')
+  })
+
+  it('retry() shows connecting and forces an immediate reconnect', async () => {
+    const states: AppState[] = []
+    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const { service, rpc } = makeService(states, store)
+    await service.start()
+
+    service.retry()
+
+    expect(states.at(-1)?.status).toBe('connecting')
+    expect(rpc.reconnectNowCalls).toBe(1)
   })
 
   it('reads initial mute/deafen from Discord and applies VOICE_SETTINGS_UPDATE events', async () => {
