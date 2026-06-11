@@ -1,17 +1,77 @@
-// Rising-edge detection for a held button combination (e.g. Select+Start).
-// Pure so the gamepad loop's chord handling can be unit-tested without a real
-// controller. The combo fires once when both buttons first go down together,
-// and re-arms only after they are released.
-export interface ChordState {
-  held: boolean
+// Pure decision logic for the Select+Start show/hide chord and its interaction
+// with the Start-alone Favorite action. Kept pure so the timing-sensitive combo
+// behaviour can be unit-tested without a real controller.
+//
+// Why the grace window: pressing Select+Start together is rarely perfectly
+// simultaneous. If Start registers a frame or two before Select, a naive
+// implementation fires Favorite and then the chord. So Start-alone defers its
+// Favorite by a small window; if Select arrives within it, the press is
+// reinterpreted as the chord and the Favorite is cancelled.
+export const CHORD_GRACE_MS = 150
+
+export interface ComboState {
+  chordHeld: boolean
+  startHeld: boolean
+  /** When Start went down alone; its Favorite is pending until resolved. */
+  pendingFavoriteAt: number | null
 }
 
-export const initialChordState: ChordState = { held: false }
+export const initialComboState: ComboState = {
+  chordHeld: false,
+  startHeld: false,
+  pendingFavoriteAt: null
+}
 
-export function stepChord(
-  prev: ChordState,
-  bothPressed: boolean
-): { state: ChordState; fired: boolean } {
-  const fired = bothPressed && !prev.held
-  return { state: { held: bothPressed }, fired }
+export interface ComboInput {
+  selectPressed: boolean
+  startPressed: boolean
+  now: number
+}
+
+export interface ComboResult {
+  state: ComboState
+  toggleVisibility: boolean
+  toggleFavorite: boolean
+}
+
+export function stepCombo(
+  prev: ComboState,
+  input: ComboInput,
+  graceMs = CHORD_GRACE_MS
+): ComboResult {
+  const { selectPressed, startPressed, now } = input
+  const bothPressed = selectPressed && startPressed
+
+  let toggleVisibility = false
+  let pendingFavoriteAt = prev.pendingFavoriteAt
+
+  // Chord rising edge -> show/hide; cancel any Favorite that was mid-grace.
+  if (bothPressed && !prev.chordHeld) {
+    toggleVisibility = true
+    pendingFavoriteAt = null
+  }
+
+  // Start pressed alone -> start the grace window instead of firing now.
+  const startEdge = startPressed && !prev.startHeld
+  if (startEdge && !selectPressed) {
+    pendingFavoriteAt = now
+  }
+
+  let toggleFavorite = false
+  if (pendingFavoriteAt !== null) {
+    if (selectPressed) {
+      // Select arrived within the window: this was the chord, not a Favorite.
+      pendingFavoriteAt = null
+    } else if (!startPressed || now - pendingFavoriteAt >= graceMs) {
+      // Quick tap released, or Start held past the window with no Select.
+      toggleFavorite = true
+      pendingFavoriteAt = null
+    }
+  }
+
+  return {
+    state: { chordHeld: bothPressed, startHeld: startPressed, pendingFavoriteAt },
+    toggleVisibility,
+    toggleFavorite
+  }
 }
