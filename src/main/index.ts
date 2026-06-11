@@ -1,8 +1,9 @@
-import { app, BrowserWindow, globalShortcut, ipcMain } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, Tray } from 'electron'
 import { join } from 'path'
 import { DiscordRpcClient } from './discord/rpc-client'
 import { DiscordService } from './service'
 import { AppStore } from './store'
+import { TRAY_ICON_DATA_URL } from './tray-icon'
 import { IPC, type AppState } from '../shared/ipc'
 
 const TOGGLE_VISIBILITY_SHORTCUT = 'CommandOrControl+Shift+`'
@@ -21,7 +22,28 @@ function toggleVisibility(window: BrowserWindow): void {
     window.hide()
   } else {
     window.show()
+    window.focus()
   }
+}
+
+// Held so it isn't garbage-collected (which would remove the icon).
+let tray: Tray | null = null
+
+function createTray(window: BrowserWindow): Tray {
+  const icon = nativeImage.createFromDataURL(TRAY_ICON_DATA_URL)
+  const t = new Tray(icon)
+  t.setToolTip('Discord Big Picture')
+  t.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Show / Hide', click: () => toggleVisibility(window) },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() }
+    ])
+  )
+  // Left-click toggles on Windows/Linux; on macOS it opens the menu (which has
+  // Show / Hide) — both give a reliable mouse path to summon a hidden window.
+  t.on('click', () => toggleVisibility(window))
+  return t
 }
 
 function createWindow(store: AppStore): BrowserWindow {
@@ -37,7 +59,10 @@ function createWindow(store: AppStore): BrowserWindow {
     alwaysOnTop: true,
     skipTaskbar: false,
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js')
+      preload: join(__dirname, '../preload/index.js'),
+      // Keep the gamepad-polling loop running at full rate when the window is
+      // backgrounded/occluded (e.g. behind the Steam overlay).
+      backgroundThrottling: false
     }
   })
 
@@ -89,6 +114,7 @@ app.whenReady().then(() => {
   const store = new AppStore()
   const mainWindow = createWindow(store)
   startService(mainWindow, store)
+  tray = createTray(mainWindow)
 
   globalShortcut.register(TOGGLE_VISIBILITY_SHORTCUT, () => toggleVisibility(mainWindow))
 

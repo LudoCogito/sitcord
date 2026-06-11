@@ -1,4 +1,5 @@
 import type { NavAction } from './navigation'
+import { initialChordState, stepChord, type ChordState } from './chord'
 
 export type InputAction =
   | { type: 'nav'; action: NavAction }
@@ -35,6 +36,8 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
   let stopped = false
   const wasPressed = new Map<string, boolean>()
   const stickDirection = new Map<number, 'up' | 'down' | null>()
+  const chordState = new Map<number, ChordState>()
+  const startWasPressed = new Map<number, boolean>()
 
   function fireOnPress(gamepad: Gamepad, buttonIndex: number, action: InputAction): void {
     const key = `${gamepad.index}:${buttonIndex}`
@@ -72,10 +75,25 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
       fireOnPress(gamepad, BUTTON_B, { type: 'disconnect' })
       fireOnPress(gamepad, BUTTON_X, { type: 'toggleMute' })
       fireOnPress(gamepad, BUTTON_Y, { type: 'toggleDeafen' })
-      fireOnPress(gamepad, BUTTON_START, { type: 'toggleFavorite' })
-      fireOnPress(gamepad, BUTTON_SELECT, { type: 'toggleVisibility' })
       fireOnPress(gamepad, BUTTON_LEFT_TRIGGER, { type: 'zoom', direction: 'out' })
       fireOnPress(gamepad, BUTTON_RIGHT_TRIGGER, { type: 'zoom', direction: 'in' })
+
+      // Select+Start chord toggles window visibility. It lives on every
+      // controller and is hard to fumble, so it's the deliberate show/hide
+      // gesture. Handled before the Start single-press so the combo doesn't
+      // also fire Favorite.
+      const selectPressed = gamepad.buttons[BUTTON_SELECT]?.pressed ?? false
+      const startPressed = gamepad.buttons[BUTTON_START]?.pressed ?? false
+      const prevChord = chordState.get(gamepad.index) ?? initialChordState
+      const { state: nextChord, fired } = stepChord(prevChord, selectPressed && startPressed)
+      chordState.set(gamepad.index, nextChord)
+      if (fired) onAction({ type: 'toggleVisibility' })
+
+      // Start alone = Favorite, suppressed while Select is held to reserve the
+      // chord (press both together, not Start-then-Select).
+      const startEdge = startPressed && !startWasPressed.get(gamepad.index)
+      startWasPressed.set(gamepad.index, startPressed)
+      if (startEdge && !selectPressed) onAction({ type: 'toggleFavorite' })
 
       pollStick(gamepad)
     }

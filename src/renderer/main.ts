@@ -97,7 +97,8 @@ function render(): void {
 
   const legend = document.createElement('div')
   legend.className = 'legend'
-  legend.textContent = 'A Join · B Disconnect · X Mute · Y Deafen · Start Favorite · LT/RT Zoom'
+  legend.textContent =
+    'A Join · B Disconnect · X Mute · Y Deafen · Start Favorite · LT/RT Zoom · Select+Start Show/Hide'
   app.appendChild(legend)
 }
 

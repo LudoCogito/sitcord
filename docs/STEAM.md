@@ -70,11 +70,28 @@ like any other entry. Once launched it opens as a small always-on-top window:
 
 - Navigate with the D-pad/left stick, switch servers with the bumpers.
 - **A** joins the selected channel, **B** disconnects, **X**/**Y** toggle
-  mute/deafen, **Start** toggles favorite.
-- **Select** (or Ctrl/Cmd+Shift+backtick on a keyboard) hides/shows the
-  window without closing it, so you can tuck it away once you've joined a
-  channel and bring it back later to switch.
+  mute/deafen, **Start** toggles favorite, **LT/RT** zoom the UI in/out for
+  your viewing distance.
+- **Select + Start together** hides/shows the window without closing it — a
+  two-button chord (present on every controller, hard to press by accident) so
+  you can tuck it away once you've joined a channel and bring it back to
+  switch.
 
-To fully quit the app, use the Steam overlay's "Stop" / quit option for the
-non-Steam game entry (or `Ctrl/Cmd+Q` on a keyboard), since the window itself
-has no title bar or close button.
+### Bringing the window back from inside a game
+
+The Select+Start chord works whenever Discord Big Picture has input focus
+(including behind the Steam overlay). But while a **different** fullscreen game
+holds the controller, this app can't read the gamepad, so the chord can't
+summon it from there. Three reliable ways to bring it back regardless:
+
+- **System-tray / menu-bar icon** — Discord Big Picture parks a microphone icon
+  there the whole time it's running (so you can always tell it's active).
+  Click it (Windows/Linux) or use its **Show / Hide** menu item (macOS) to
+  toggle the window.
+- **Global hotkey** — `Ctrl/Cmd + Shift + backtick` shows/hides it from any app.
+- **Steam Input chord** — in the per-game controller layout, map a button chord
+  to that global hotkey so a controller combo summons it even mid-game.
+
+To fully quit the app, use the tray icon's **Quit** item, the Steam overlay's
+"Stop" / quit option for the non-Steam game entry, or `Ctrl/Cmd+Q` on a
+keyboard — the window itself has no title bar or close button.
