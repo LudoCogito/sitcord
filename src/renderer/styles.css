@@ -12,6 +12,9 @@
   --favorite: #f0b132;
   --current: #23a55a;
   --danger: #f23f42;
+  /* Channel name size; server headers derive from this so they stay exactly
+     20% larger. */
+  --channel-font: 0.8rem;
 }
 
 * {
@@ -95,7 +98,7 @@ body {
   align-items: center;
   gap: 0.4rem;
   padding: 0.6rem 0.7rem 0.35rem;
-  font-size: 0.74rem;
+  font-size: calc(var(--channel-font) * 1.2);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -139,7 +142,9 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.55rem 0.7rem;
+  /* Extra left padding indents channels under the server *name* (past the
+     chevron), not under the chevron, for a clear group hierarchy. */
+  padding: 0.55rem 0.7rem 0.55rem 1.65rem;
   margin: 0.1rem 0.35rem;
   border-radius: 0.35rem;
   line-height: 1.2;
@@ -160,6 +165,7 @@ body {
 .channel-name {
   flex: 1 1 auto;
   min-width: 0;
+  font-size: var(--channel-font);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
