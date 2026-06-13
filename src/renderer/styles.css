@@ -39,7 +39,7 @@ body {
 }
 
 .status {
-  padding: 0.5rem 0.7rem;
+  padding: 0.75rem 0.7rem;
   font-size: 0.6rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -47,15 +47,23 @@ body {
   color: var(--fg-muted);
   border-bottom: 1px solid var(--bg-alt);
   flex: 0 0 auto;
-  /* The frameless window has no title bar; the status bar doubles as a drag
-     handle so it can be repositioned with a mouse. */
+  cursor: move;
+  /* The frameless window has no title bar, so the chrome (this top bar, the
+     bottom legend, and the server headers) doubles as drag handles for
+     repositioning with a mouse. Interactive elements opt out below. */
   -webkit-app-region: drag;
 }
 
-/* Interactive elements must opt out of the drag region or they can't be
-   clicked. */
+.legend,
+.group-header {
+  -webkit-app-region: drag;
+}
+
+/* Interactive/scrollable areas must opt out of the drag region or they can't
+   be clicked or scrolled. */
 .menu-button,
-.channel-row {
+.channel-row,
+.channel-list {
   -webkit-app-region: no-drag;
 }
 
@@ -95,6 +103,13 @@ body {
   margin: 0.1rem 0.35rem;
   border-radius: 0.35rem;
   line-height: 1.2;
+  cursor: pointer;
+}
+
+/* Mouse hover gets a softer purple wash; the controller/keyboard selection
+   below is the full accent. */
+.channel-row:hover:not(.selected) {
+  background: rgba(88, 101, 242, 0.28);
 }
 
 .channel-row.selected {
@@ -166,6 +181,11 @@ body {
   background: var(--bg-alt);
   text-align: center;
   font-weight: 600;
+  cursor: pointer;
+}
+
+.menu-button:hover:not(.selected) {
+  background: rgba(88, 101, 242, 0.45);
 }
 
 .menu-button.selected {

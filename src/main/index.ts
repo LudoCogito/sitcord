@@ -13,7 +13,7 @@ import { spawn } from 'node:child_process'
 import { join } from 'path'
 import { DiscordRpcClient } from './discord/rpc-client'
 import { DiscordService } from './service'
-import { AppStore } from './store'
+import { AppStore, type WindowBounds } from './store'
 import { TRAY_ICON_DATA_URL } from './tray-icon'
 import { IPC, type AppState } from '../shared/ipc'
 
@@ -125,11 +125,20 @@ function topRightPosition(width: number, height: number): { x: number; y: number
   }
 }
 
+// Saved bounds from a since-changed monitor layout could land the window
+// entirely off any display; treat those as invalid and fall back to top-right.
+function isOnScreen(b: WindowBounds): boolean {
+  return screen.getAllDisplays().some(({ workArea: a }) => {
+    return b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + b.height > a.y
+  })
+}
+
 function createWindow(store: AppStore): BrowserWindow {
   const bounds = store.getWindowBounds()
   const width = bounds?.width ?? DEFAULT_WIDTH
   const height = bounds?.height ?? DEFAULT_HEIGHT
-  const position = bounds ? { x: bounds.x, y: bounds.y } : topRightPosition(width, height)
+  const position =
+    bounds && isOnScreen(bounds) ? { x: bounds.x, y: bounds.y } : topRightPosition(width, height)
 
   const mainWindow = new BrowserWindow({
     width,

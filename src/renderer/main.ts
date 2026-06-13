@@ -106,6 +106,11 @@ function renderMenu(): HTMLElement {
     button.className = 'menu-button'
     if (i === menuIndex) button.classList.add('selected')
     button.textContent = item.label
+    button.addEventListener('click', () => {
+      menuIndex = i
+      item.run()
+      render()
+    })
     wrap.appendChild(button)
   })
 
@@ -138,9 +143,22 @@ function render(): void {
   const list = document.createElement('div')
   list.className = 'channel-list'
   let selectedEl: HTMLElement | null = null
+  let channelIndex = 0
   for (const row of buildView(state, selectionIndex)) {
     const el = renderRow(row)
-    if (row.kind === 'channel' && row.isSelected) selectedEl = el
+    if (row.kind === 'channel') {
+      if (row.isSelected) selectedEl = el
+      const index = channelIndex
+      const channelId = row.channelId
+      // Clicking a channel both moves the selection there and joins it — the
+      // primary mouse action for a voice switcher.
+      el.addEventListener('click', () => {
+        selectionIndex = index
+        void window.api.join(channelId)
+        render()
+      })
+      channelIndex++
+    }
     list.appendChild(el)
   }
   app.appendChild(list)
