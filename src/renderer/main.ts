@@ -130,7 +130,7 @@ function render(): void {
 
   if (isMenuMode()) {
     app.appendChild(renderMenu())
-    legend.textContent = 'A Select · LT/RT Zoom · R3 Minimize · Select+Start Show/Hide'
+    legend.textContent = 'A Select · LT/RT Zoom · LB+RB Minimize · Select+Start Show/Hide'
     app.appendChild(legend)
     return
   }
@@ -150,7 +150,7 @@ function render(): void {
   selectedEl?.scrollIntoView({ block: 'nearest' })
 
   legend.textContent =
-    'A Join · B Disconnect · X Mute · Y Deafen · Start Favorite · LT/RT Zoom · R3 Minimize · Select+Start Show/Hide'
+    'A Join · B Disconnect · X Mute · Y Deafen · Start Favorite · LT/RT Zoom · LB+RB Minimize · Select+Start Show/Hide'
   app.appendChild(legend)
 }
 

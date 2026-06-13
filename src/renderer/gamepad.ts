@@ -29,9 +29,6 @@ const BUTTON_LEFT_TRIGGER = 6
 const BUTTON_RIGHT_TRIGGER = 7
 const BUTTON_SELECT = 8
 const BUTTON_START = 9
-// Right-stick click. The right stick is otherwise unused, so this won't fire by
-// accident while navigating with the left stick.
-const BUTTON_R3 = 11
 
 const AXIS_LEFT_STICK_Y = 1
 
@@ -80,7 +77,19 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
       fireOnPress(gamepad, BUTTON_Y, { type: 'toggleDeafen' })
       fireOnPress(gamepad, BUTTON_LEFT_TRIGGER, { type: 'zoom', direction: 'out' })
       fireOnPress(gamepad, BUTTON_RIGHT_TRIGGER, { type: 'zoom', direction: 'in' })
-      fireOnPress(gamepad, BUTTON_R3, { type: 'minimize' })
+
+      // Both bumpers together = minimize (a deliberate two-button squeeze that
+      // won't happen by accident; distinct from the Select+Start show/hide
+      // chord, and not the Guide button which Steam/overlays reserve). The
+      // individual bumpers still fire group nav — the incidental group hop is
+      // invisible once the window parks. Restore comes from the global hotkey
+      // or tray, since a minimized window stops polling the gamepad.
+      const bothBumpers =
+        (gamepad.buttons[BUTTON_LEFT_BUMPER]?.pressed ?? false) &&
+        (gamepad.buttons[BUTTON_RIGHT_BUMPER]?.pressed ?? false)
+      const bumperChordKey = `${gamepad.index}:bumperMinimize`
+      if (bothBumpers && !wasPressed.get(bumperChordKey)) onAction({ type: 'minimize' })
+      wasPressed.set(bumperChordKey, bothBumpers)
 
       // Select+Start chord toggles window visibility (present on every
       // controller, hard to fumble); Start alone = Favorite. stepCombo handles
@@ -120,7 +129,6 @@ const KEY_ACTIONS: Record<string, InputAction> = {
   y: { type: 'toggleDeafen' },
   f: { type: 'toggleFavorite' },
   Tab: { type: 'toggleVisibility' },
-  m: { type: 'minimize' },
   '-': { type: 'zoom', direction: 'out' },
   '=': { type: 'zoom', direction: 'in' },
   '+': { type: 'zoom', direction: 'in' },

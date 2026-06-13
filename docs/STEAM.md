@@ -76,6 +76,10 @@ like any other entry. Once launched it opens as a small always-on-top window:
   two-button chord (present on every controller, hard to press by accident) so
   you can tuck it away once you've joined a channel and bring it back to
   switch.
+- **LB + RB together** minimizes the window to the taskbar (another deliberate
+  two-button squeeze, distinct from Select+Start). Restore it with the global
+  minimize hotkey below or the tray icon — a minimized window stops reading the
+  gamepad, so the chord itself only parks it.
 
 ### Bringing the window back from inside a game
 
@@ -88,9 +92,13 @@ summon it from there. Three reliable ways to bring it back regardless:
   there the whole time it's running (so you can always tell it's active).
   Click it (Windows/Linux) or use its **Show / Hide** menu item (macOS) to
   toggle the window.
-- **Global hotkey** — `Ctrl/Cmd + Shift + backtick` shows/hides it from any app.
+- **Global hotkeys** — `Ctrl/Cmd + Shift + backtick` shows/hides it from any
+  app; `Ctrl/Cmd + Shift + M` minimizes/restores it.
 - **Steam Input chord** — in the per-game controller layout, map a button chord
-  to that global hotkey so a controller combo summons it even mid-game.
+  to those global hotkeys so a controller combo summons or minimizes it even
+  mid-game. Bind a *combo* (e.g. a back paddle, or Guide + another button) —
+  **don't bind the Guide/center button alone**, since Steam and other overlays
+  reserve it.
 
 To fully quit the app, use the tray icon's **Quit** item, the Steam overlay's
 "Stop" / quit option for the non-Steam game entry, or `Ctrl/Cmd+Q` on a

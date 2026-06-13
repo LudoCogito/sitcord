@@ -8,6 +8,10 @@ import { TRAY_ICON_DATA_URL } from './tray-icon'
 import { IPC, type AppState } from '../shared/ipc'
 
 const TOGGLE_VISIBILITY_SHORTCUT = 'CommandOrControl+Shift+`'
+// Minimize/restore. Bind a controller combo to this in Steam Input for a
+// controller-only minimize (don't use the Guide button alone — Steam and other
+// overlays reserve it).
+const TOGGLE_MINIMIZE_SHORTCUT = 'CommandOrControl+Shift+M'
 
 try {
   process.loadEnvFile(join(__dirname, '../../.env'))
@@ -31,6 +35,18 @@ function toggleVisibility(window: BrowserWindow): void {
     window.hide()
   } else {
     showWindow(window)
+  }
+}
+
+// Minimize when up, restore when parked. The in-app LB+RB chord can only reach
+// the "minimize" half (a minimized window stops polling the gamepad); the
+// global hotkey and tray cover restore.
+function toggleMinimize(window: BrowserWindow): void {
+  if (window.isMinimized()) {
+    window.restore()
+    window.focus()
+  } else {
+    window.minimize()
   }
 }
 
@@ -141,7 +157,7 @@ function startService(mainWindow: BrowserWindow, store: AppStore): DiscordServic
   ipcMain.handle(IPC.VOICE_SET_DEAFEN, (_event, deafened: boolean) => service.setDeafen(deafened))
   ipcMain.handle(IPC.FAVORITE_TOGGLE, (_event, channelId: string) => service.toggleFavorite(channelId))
   ipcMain.handle(IPC.WINDOW_TOGGLE, () => toggleVisibility(mainWindow))
-  ipcMain.handle(IPC.WINDOW_MINIMIZE, () => mainWindow.minimize())
+  ipcMain.handle(IPC.WINDOW_MINIMIZE, () => toggleMinimize(mainWindow))
   ipcMain.handle(IPC.LAUNCH_DISCORD, () => launchDiscord())
   ipcMain.handle(IPC.RETRY_CONNECTION, () => service.retry())
 
@@ -155,6 +171,7 @@ app.whenReady().then(() => {
   tray = createTray(mainWindow)
 
   globalShortcut.register(TOGGLE_VISIBILITY_SHORTCUT, () => toggleVisibility(mainWindow))
+  globalShortcut.register(TOGGLE_MINIMIZE_SHORTCUT, () => toggleMinimize(mainWindow))
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(store)
