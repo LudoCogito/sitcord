@@ -85,11 +85,10 @@ export function glyphsFor(kind: ControllerKind): ButtonGlyphs {
 export function buildLegend(kind: ControllerKind, mode: 'menu' | 'channels'): LegendEntry[] {
   const g = glyphsFor(kind)
   const zoom = { icon: `${g.lt}/${g.rt}`, label: 'Zoom' }
-  const minimize = { icon: `${g.r3}+${g.lb}`, label: 'Minimize' }
-  const showHide = { icon: `${g.select}+${g.start}`, label: 'Show/Hide' }
+  const showHide = { icon: `${g.r3}+${g.lb}`, label: 'Show/Hide' }
 
   if (mode === 'menu') {
-    return [{ icon: g.a, label: 'Select' }, zoom, minimize, showHide]
+    return [{ icon: g.a, label: 'Select' }, zoom, showHide]
   }
 
   return [
@@ -99,7 +98,6 @@ export function buildLegend(kind: ControllerKind, mode: 'menu' | 'channels'): Le
     { icon: g.y, label: 'Deafen' },
     { icon: g.start, label: 'Favorite' },
     zoom,
-    minimize,
     showHide
   ]
 }

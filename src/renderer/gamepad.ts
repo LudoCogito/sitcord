@@ -1,5 +1,4 @@
 import type { NavAction } from './navigation'
-import { initialComboState, stepCombo, type ComboState } from './chord'
 
 export type InputAction =
   | { type: 'nav'; action: NavAction }
@@ -27,7 +26,6 @@ const BUTTON_X = 2
 const BUTTON_Y = 3
 const BUTTON_LEFT_TRIGGER = 6
 const BUTTON_RIGHT_TRIGGER = 7
-const BUTTON_SELECT = 8
 const BUTTON_START = 9
 // Right-stick click. Too easy to hit by accident on its own, but paired with LB
 // it's a deliberate chord — and it dodges the LB+RB combo that games lean on.
@@ -40,7 +38,6 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
   let stopped = false
   const wasPressed = new Map<string, boolean>()
   const stickDirection = new Map<number, 'up' | 'down' | null>()
-  const comboState = new Map<number, ComboState>()
 
   function fireOnPress(gamepad: Gamepad, buttonIndex: number, action: InputAction): void {
     const key = `${gamepad.index}:${buttonIndex}`
@@ -80,31 +77,21 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
       fireOnPress(gamepad, BUTTON_Y, { type: 'toggleDeafen' })
       fireOnPress(gamepad, BUTTON_LEFT_TRIGGER, { type: 'zoom', direction: 'out' })
       fireOnPress(gamepad, BUTTON_RIGHT_TRIGGER, { type: 'zoom', direction: 'in' })
+      fireOnPress(gamepad, BUTTON_START, { type: 'toggleFavorite' })
 
-      // R3 + LB together = minimize (a deliberate two-button chord that won't
-      // happen by accident; distinct from the Select+Start show/hide chord, and
+      // R3 + LB together = show/hide the window — the single window toggle. A
+      // deliberate two-button chord that won't happen by accident, and it
       // sidesteps the LB+RB combo games lean on and the Guide button overlays
-      // reserve). LB still fires group nav on its own — the incidental group hop
-      // is invisible once the window parks. Restore comes from the global hotkey
-      // or tray, since a minimized window stops polling the gamepad.
-      const minimizeChord =
+      // reserve. LB still fires group nav on its own — the incidental group hop
+      // is invisible once the window parks. The window keeps polling the gamepad
+      // while parked (backgroundThrottling is off), so the same chord brings it
+      // back.
+      const windowChord =
         (gamepad.buttons[BUTTON_R3]?.pressed ?? false) &&
         (gamepad.buttons[BUTTON_LEFT_BUMPER]?.pressed ?? false)
-      const minimizeChordKey = `${gamepad.index}:minimizeChord`
-      if (minimizeChord && !wasPressed.get(minimizeChordKey)) onAction({ type: 'minimize' })
-      wasPressed.set(minimizeChordKey, minimizeChord)
-
-      // Select+Start chord toggles window visibility (present on every
-      // controller, hard to fumble); Start alone = Favorite. stepCombo handles
-      // the timing so a Start-then-Select roll within the grace window is read
-      // as the chord rather than a stray Favorite.
-      const selectPressed = gamepad.buttons[BUTTON_SELECT]?.pressed ?? false
-      const startPressed = gamepad.buttons[BUTTON_START]?.pressed ?? false
-      const prevCombo = comboState.get(gamepad.index) ?? initialComboState
-      const combo = stepCombo(prevCombo, { selectPressed, startPressed, now: performance.now() })
-      comboState.set(gamepad.index, combo.state)
-      if (combo.toggleVisibility) onAction({ type: 'toggleVisibility' })
-      if (combo.toggleFavorite) onAction({ type: 'toggleFavorite' })
+      const windowChordKey = `${gamepad.index}:windowChord`
+      if (windowChord && !wasPressed.get(windowChordKey)) onAction({ type: 'minimize' })
+      wasPressed.set(windowChordKey, windowChord)
 
       pollStick(gamepad)
     }

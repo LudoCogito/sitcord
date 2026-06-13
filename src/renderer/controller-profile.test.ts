@@ -66,8 +66,17 @@ describe('buildLegend', () => {
     expect(entries.find((e) => e.label === 'Join')?.icon).toBe('✕')
   })
 
-  it('menu mode only exposes select, zoom, minimize and show/hide', () => {
+  it('menu mode only exposes select, zoom and show/hide', () => {
     const labels = buildLegend('xbox', 'menu').map((e) => e.label)
-    expect(labels).toEqual(['Select', 'Zoom', 'Minimize', 'Show/Hide'])
+    expect(labels).toEqual(['Select', 'Zoom', 'Show/Hide'])
+  })
+
+  it('maps show/hide to the R3+LB chord', () => {
+    expect(buildLegend('xbox', 'channels').find((e) => e.label === 'Show/Hide')?.icon).toBe(
+      'R3+LB'
+    )
+    expect(buildLegend('playstation', 'channels').find((e) => e.label === 'Show/Hide')?.icon).toBe(
+      'R3+L1'
+    )
   })
 })

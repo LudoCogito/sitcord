@@ -81,6 +81,11 @@ body {
 
 .channel-list {
   flex: 1 1 auto;
+  /* Without min-height:0 a flex item won't shrink below its content, so the
+     list would grow to fit every channel — pushing rows (and the legend) off
+     the bottom and defeating its own overflow scroll, which is why the
+     selection highlight could scroll out of reach. */
+  min-height: 0;
   overflow-y: auto;
   padding: 0.3rem 0;
 }
