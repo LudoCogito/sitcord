@@ -146,6 +146,53 @@ Notes:
   fullscreen the OS may swallow the injected keystroke or refuse to draw this
   always-on-top window over the game; borderless avoids both.
 
+## 5. Recommended: pin it and summon from Big Picture
+
+The simplest controller-only, works-in-any-game setup needs **no per-game Steam
+Input config**. It leans on the one truly universal controller input — the
+Guide button, which opens Big Picture from inside any game — plus the fact that
+the app only ever runs one copy, so re-selecting it focuses the running window
+instead of opening a duplicate.
+
+**One-time setup**
+
+1. Add the app as a Non-Steam Game (section 2) and enable controller support
+   (section 3).
+2. In Big Picture, open its library page and **pin / favorite** it so it's a
+   couple of inputs away rather than buried in the library.
+
+**Each session**
+
+1. Make sure Discord desktop is running and signed in.
+2. **Launch Discord Big Picture first.** It connects, then you can tuck it away
+   (Select+Start to hide, or it stays in the tray).
+3. Launch your game as usual.
+
+**To bring it back while gaming**
+
+- Press the **Guide** button → Big Picture opens.
+- Select the pinned Discord Big Picture entry → the running window comes to the
+  front (the single-instance lock turns the "launch" into a focus). Switch your
+  channel, then hide it again and tab back to your game.
+
+### Can Steam run the app and a game at the same time?
+
+- **Desktop (Windows / macOS / Linux, including Big Picture on a PC): yes.**
+  Steam tracks one "currently running game" in its UI, but processes coexist
+  fine. Launch the app (it lives in the tray), then launch your game — both run.
+  When the game starts, Steam's running-indicator moves to the game and the app
+  keeps running in the background (which also means its entry usually shows
+  **Play** again, so re-selecting it focuses via the single-instance lock).
+- **Steam Deck *Game Mode* is the exception.** Game Mode is built around a
+  single foreground game and may **suspend or close** the previous app when you
+  launch another, so "launch the app, then a game" won't reliably keep it alive
+  there. On a Deck, lean on the global hotkey (mapped through Steam Input) or
+  autostart instead. Desktop Big Picture has no such restriction.
+
+Tip: launch the app **before** your game so it's already in the tray.
+
+## 6. Quitting
+
 To fully quit the app, use the tray icon's **Quit** item, the Steam overlay's
 "Stop" / quit option for the non-Steam game entry, or `Ctrl/Cmd+Q` on a
 keyboard — the window itself has no title bar or close button.
