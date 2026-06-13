@@ -95,11 +95,49 @@ summon it from there. Three reliable ways to bring it back regardless:
   toggle the window.
 - **Global hotkeys** — `Ctrl/Cmd + Shift + backtick` shows/hides it from any
   app; `Ctrl/Cmd + Shift + M` minimizes/restores it.
-- **Steam Input chord** — in the per-game controller layout, map a button chord
-  to those global hotkeys so a controller combo summons or minimizes it even
-  mid-game. Bind a *combo* (e.g. a back paddle, or Guide + another button) —
-  **don't bind the Guide/center button alone**, since Steam and other overlays
-  reserve it.
+- **Steam Input chord** — map a controller button/chord to send one of the
+  global hotkeys above, so a controller combo summons or minimizes the window
+  even mid-game. Step-by-step below.
+
+#### Binding a controller button to the global hotkey
+
+The two hotkeys are registered by the app at the **OS level**, so they fire no
+matter which app has focus. That means the job isn't to bind the controller
+inside *this* app — it's to get Steam to **emit the keystroke** while another
+game is in the foreground. The chain is:
+
+> controller chord → Steam Input sends `Ctrl/Cmd+Shift+\`` → the OS routes it to
+> this app's global shortcut → the window appears.
+
+Because Steam Input layouts are **per-game** (the active layout belongs to
+whatever game currently has focus), you configure the layout of the **game you
+are playing**, not this app's layout:
+
+1. In Steam, enable Steam Input for that game — its **Controller** settings →
+   **Enable Steam Input**.
+2. Open the game's layout: Steam → the game → the **controller icon** →
+   **Edit Layout**.
+3. Pick a trigger that won't clash with the game — a **back paddle** is ideal,
+   or a chord such as "hold a bumper, then press a face button." Add a
+   **Keyboard** command to that button.
+4. Enter the combo:
+   - Show / hide → `Ctrl + Shift + \`` (Windows/Linux) or `Cmd + Shift + \``
+     (macOS).
+   - Minimize / restore → `Ctrl/Cmd + Shift + M`.
+5. For a chord, bind the command to one button and add the **"requires
+   [other button] held"** activator (Steam calls this a chord/modifier).
+6. Save.
+
+Notes:
+
+- **Don't bind the Guide/center button alone** — Steam and other overlays
+  reserve it. Use a paddle or a multi-button chord.
+- This is **per-game**: repeat for each game you want to summon from. There is
+  no single Steam binding that works across all games (the only truly global
+  controller chords are the Steam/Guide-button ones Steam reserves for itself).
+- **Borderless / windowed-fullscreen games work best.** In *exclusive*
+  fullscreen the OS may swallow the injected keystroke or refuse to draw this
+  always-on-top window over the game; borderless avoids both.
 
 To fully quit the app, use the tray icon's **Quit** item, the Steam overlay's
 "Stop" / quit option for the non-Steam game entry, or `Ctrl/Cmd+Q` on a
