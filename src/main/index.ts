@@ -1,4 +1,14 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, shell, Tray } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  ipcMain,
+  Menu,
+  nativeImage,
+  screen,
+  shell,
+  Tray
+} from 'electron'
 import { spawn } from 'node:child_process'
 import { join } from 'path'
 import { DiscordRpcClient } from './discord/rpc-client'
@@ -99,14 +109,33 @@ function createTray(window: BrowserWindow): Tray {
   return t
 }
 
+const DEFAULT_WIDTH = 460
+const DEFAULT_HEIGHT = 760
+// Gap from the screen edge for the first-launch position.
+const EDGE_MARGIN = 16
+
+// First-launch home: tucked into the top-right corner of the primary display's
+// work area (which excludes the taskbar/dock). After the user drags it, the
+// saved bounds take over and this is no longer used.
+function topRightPosition(width: number, height: number): { x: number; y: number } {
+  const { workArea } = screen.getPrimaryDisplay()
+  return {
+    x: workArea.x + workArea.width - width - EDGE_MARGIN,
+    y: workArea.y + EDGE_MARGIN
+  }
+}
+
 function createWindow(store: AppStore): BrowserWindow {
   const bounds = store.getWindowBounds()
+  const width = bounds?.width ?? DEFAULT_WIDTH
+  const height = bounds?.height ?? DEFAULT_HEIGHT
+  const position = bounds ? { x: bounds.x, y: bounds.y } : topRightPosition(width, height)
 
   const mainWindow = new BrowserWindow({
-    width: bounds?.width ?? 460,
-    height: bounds?.height ?? 760,
-    x: bounds?.x,
-    y: bounds?.y,
+    width,
+    height,
+    x: position.x,
+    y: position.y,
     show: false,
     frame: false,
     alwaysOnTop: true,
