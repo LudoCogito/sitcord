@@ -76,10 +76,11 @@ like any other entry. Once launched it opens as a small always-on-top window:
   two-button chord (present on every controller, hard to press by accident) so
   you can tuck it away once you've joined a channel and bring it back to
   switch.
-- **LB + RB together** minimizes the window to the taskbar (another deliberate
-  two-button squeeze, distinct from Select+Start). Restore it with the global
-  minimize hotkey below or the tray icon — a minimized window stops reading the
-  gamepad, so the chord itself only parks it.
+- **R3 + LB together** (right-stick click + left bumper) minimizes the window to
+  the taskbar — a deliberate two-button chord, distinct from Select+Start and
+  from the LB+RB combo games commonly use. Restore it with the global minimize
+  hotkey below or the tray icon — a minimized window stops reading the gamepad,
+  so the chord itself only parks it.
 
 ### Bringing the window back from inside a game
 

@@ -29,6 +29,9 @@ const BUTTON_LEFT_TRIGGER = 6
 const BUTTON_RIGHT_TRIGGER = 7
 const BUTTON_SELECT = 8
 const BUTTON_START = 9
+// Right-stick click. Too easy to hit by accident on its own, but paired with LB
+// it's a deliberate chord — and it dodges the LB+RB combo that games lean on.
+const BUTTON_R3 = 11
 
 const AXIS_LEFT_STICK_Y = 1
 
@@ -78,18 +81,18 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
       fireOnPress(gamepad, BUTTON_LEFT_TRIGGER, { type: 'zoom', direction: 'out' })
       fireOnPress(gamepad, BUTTON_RIGHT_TRIGGER, { type: 'zoom', direction: 'in' })
 
-      // Both bumpers together = minimize (a deliberate two-button squeeze that
-      // won't happen by accident; distinct from the Select+Start show/hide
-      // chord, and not the Guide button which Steam/overlays reserve). The
-      // individual bumpers still fire group nav — the incidental group hop is
-      // invisible once the window parks. Restore comes from the global hotkey
+      // R3 + LB together = minimize (a deliberate two-button chord that won't
+      // happen by accident; distinct from the Select+Start show/hide chord, and
+      // sidesteps the LB+RB combo games lean on and the Guide button overlays
+      // reserve). LB still fires group nav on its own — the incidental group hop
+      // is invisible once the window parks. Restore comes from the global hotkey
       // or tray, since a minimized window stops polling the gamepad.
-      const bothBumpers =
-        (gamepad.buttons[BUTTON_LEFT_BUMPER]?.pressed ?? false) &&
-        (gamepad.buttons[BUTTON_RIGHT_BUMPER]?.pressed ?? false)
-      const bumperChordKey = `${gamepad.index}:bumperMinimize`
-      if (bothBumpers && !wasPressed.get(bumperChordKey)) onAction({ type: 'minimize' })
-      wasPressed.set(bumperChordKey, bothBumpers)
+      const minimizeChord =
+        (gamepad.buttons[BUTTON_R3]?.pressed ?? false) &&
+        (gamepad.buttons[BUTTON_LEFT_BUMPER]?.pressed ?? false)
+      const minimizeChordKey = `${gamepad.index}:minimizeChord`
+      if (minimizeChord && !wasPressed.get(minimizeChordKey)) onAction({ type: 'minimize' })
+      wasPressed.set(minimizeChordKey, minimizeChord)
 
       // Select+Start chord toggles window visibility (present on every
       // controller, hard to fumble); Start alone = Favorite. stepCombo handles
