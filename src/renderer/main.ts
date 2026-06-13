@@ -223,12 +223,14 @@ function render(): void {
     list.appendChild(el)
   }
   app.appendChild(list)
-
-  // Keep the highlighted channel visible while navigating a long list with big
-  // rows — essential for couch/controller use where only a few rows fit.
-  selectedEl?.scrollIntoView({ block: 'nearest' })
-
   app.appendChild(renderLegend('channels'))
+
+  // Scroll the selection into view *after* the legend is in the DOM. The list
+  // is flex:1, so before the legend exists it's laid out one legend-height too
+  // tall; scrolling then would park a near-bottom row where the legend lands
+  // and the legend would clip it out of view. Keeping the highlighted channel
+  // visible matters most for couch/controller use where only a few rows fit.
+  selectedEl?.scrollIntoView({ block: 'nearest' })
 }
 
 function selectedChannelId(): string | null {

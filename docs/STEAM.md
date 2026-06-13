@@ -72,7 +72,7 @@ like any other entry. Once launched it opens as a small always-on-top window:
 - **A** joins the selected channel, **B** disconnects, **X**/**Y** toggle
   mute/deafen, **Start** toggles favorite, **LT/RT** zoom the UI in/out for
   your viewing distance.
-- **R3 + LB together** (right-stick click + left bumper) shows/hides the window
+- **LB + R3 together** (left bumper + right-stick click) shows/hides the window
   without closing it — a deliberate two-button chord that won't fire by accident
   and sidesteps the LB+RB combo games commonly use. The window keeps reading the
   gamepad while parked, so the **same chord brings it back**. Tuck it away once
@@ -80,7 +80,7 @@ like any other entry. Once launched it opens as a small always-on-top window:
 
 ### Bringing the window back from inside a game
 
-The R3+LB show/hide chord works whenever Discord Big Picture has input focus
+The LB+R3 show/hide chord works whenever Discord Big Picture has input focus
 (including behind the Steam overlay). But while a **different** fullscreen game
 holds the controller, this app can't read the gamepad, so the chord can't
 summon it from there. Three reliable ways to bring it back regardless:

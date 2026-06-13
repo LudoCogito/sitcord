@@ -71,12 +71,12 @@ describe('buildLegend', () => {
     expect(labels).toEqual(['Select', 'Zoom', 'Show/Hide'])
   })
 
-  it('maps show/hide to the R3+LB chord', () => {
+  it('maps show/hide to the LB+R3 chord (the order it triggers in)', () => {
     expect(buildLegend('xbox', 'channels').find((e) => e.label === 'Show/Hide')?.icon).toBe(
-      'R3+LB'
+      'LB+R3'
     )
     expect(buildLegend('playstation', 'channels').find((e) => e.label === 'Show/Hide')?.icon).toBe(
-      'R3+L1'
+      'L1+R3'
     )
   })
 })

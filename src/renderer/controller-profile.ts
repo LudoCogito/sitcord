@@ -85,7 +85,7 @@ export function glyphsFor(kind: ControllerKind): ButtonGlyphs {
 export function buildLegend(kind: ControllerKind, mode: 'menu' | 'channels'): LegendEntry[] {
   const g = glyphsFor(kind)
   const zoom = { icon: `${g.lt}/${g.rt}`, label: 'Zoom' }
-  const showHide = { icon: `${g.r3}+${g.lb}`, label: 'Show/Hide' }
+  const showHide = { icon: `${g.lb}+${g.r3}`, label: 'Show/Hide' }
 
   if (mode === 'menu') {
     return [{ icon: g.a, label: 'Select' }, zoom, showHide]

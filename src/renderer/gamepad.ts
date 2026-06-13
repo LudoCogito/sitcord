@@ -79,7 +79,7 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
       fireOnPress(gamepad, BUTTON_RIGHT_TRIGGER, { type: 'zoom', direction: 'in' })
       fireOnPress(gamepad, BUTTON_START, { type: 'toggleFavorite' })
 
-      // R3 + LB together = show/hide the window — the single window toggle. A
+      // LB + R3 together = show/hide the window — the single window toggle. A
       // deliberate two-button chord that won't happen by accident, and it
       // sidesteps the LB+RB combo games lean on and the Guide button overlays
       // reserve. LB still fires group nav on its own — the incidental group hop
