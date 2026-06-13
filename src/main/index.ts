@@ -10,6 +10,7 @@ import {
   Tray
 } from 'electron'
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { join } from 'path'
 import { DiscordRpcClient } from './discord/rpc-client'
 import { DiscordService } from './service'
@@ -31,6 +32,19 @@ try {
 
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID ?? ''
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET ?? ''
+
+// Your app icon. Drop a square PNG (1024×1024 ideal) at build/icon.png:
+//  - electron-builder uses build/ as its resources dir, so the *packaged*
+//    app/installer icon is generated from it automatically (it can also take
+//    build/icon.icns and build/icon.ico if you want hand-tuned platform icons).
+//  - In dev we load that same file below for the dock (macOS) and window/
+//    taskbar (Windows/Linux) so you're not staring at the Electron logo.
+// build/ isn't copied into the packaged bundle, but the packaged app already
+// has the icon baked in by electron-builder, so the missing-path no-op is fine.
+function appIconPath(): string | null {
+  const path = join(__dirname, '../../build/icon.png')
+  return existsSync(path) ? path : null
+}
 
 function showWindow(window: BrowserWindow): void {
   if (window.isMinimized()) window.restore()
@@ -140,6 +154,8 @@ function createWindow(store: AppStore): BrowserWindow {
   const position =
     bounds && isOnScreen(bounds) ? { x: bounds.x, y: bounds.y } : topRightPosition(width, height)
 
+  const iconPath = appIconPath()
+
   const mainWindow = new BrowserWindow({
     width,
     height,
@@ -149,6 +165,8 @@ function createWindow(store: AppStore): BrowserWindow {
     frame: false,
     alwaysOnTop: true,
     skipTaskbar: false,
+    // Window/taskbar icon on Windows/Linux (macOS uses the dock icon set below).
+    ...(iconPath ? { icon: iconPath } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       // Keep the gamepad-polling loop running at full rate when the window is
@@ -217,6 +235,13 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(() => {
+    // Replace the Electron logo in the macOS dock during development. (The
+    // packaged .app gets its icon from electron-builder, so this is a dev nicety.)
+    if (process.platform === 'darwin') {
+      const iconPath = appIconPath()
+      if (iconPath) app.dock?.setIcon(iconPath)
+    }
+
     const store = new AppStore()
     const win = createWindow(store)
     mainWindow = win

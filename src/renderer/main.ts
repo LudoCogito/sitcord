@@ -11,6 +11,9 @@ import type { AppState } from '../shared/ipc'
 const BASE_FONT_PX = 22
 const SCALE_STORAGE_KEY = 'uiScale'
 
+// Shown on the left of the titlebar. Keep in sync with package.json productName.
+const APP_NAME = 'Discord Big Picture'
+
 function loadScale(): number {
   const stored = Number(localStorage.getItem(SCALE_STORAGE_KEY))
   return Number.isFinite(stored) && stored > 0 ? stored : 1
@@ -240,10 +243,20 @@ function render(): void {
 
   app.innerHTML = ''
 
-  const status = document.createElement('div')
-  status.className = `status status--${state.status}`
+  // Frameless titlebar: app name on the left, connection status on the right.
+  const titlebar = document.createElement('div')
+  titlebar.className = 'titlebar'
+
+  const appName = document.createElement('span')
+  appName.className = 'titlebar-name'
+  appName.textContent = APP_NAME
+
+  const status = document.createElement('span')
+  status.className = `titlebar-status status--${state.status}`
   status.textContent = state.status
-  app.appendChild(status)
+
+  titlebar.append(appName, status)
+  app.appendChild(titlebar)
 
   if (isMenuMode()) {
     app.appendChild(renderMenu())
