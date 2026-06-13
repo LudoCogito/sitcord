@@ -107,7 +107,12 @@ let tray: Tray | null = null
 let mainWindow: BrowserWindow | null = null
 
 function createTray(window: BrowserWindow): Tray {
-  const icon = nativeImage.createFromDataURL(TRAY_ICON_DATA_URL)
+  // Match the app icon (build/icon.png), shrunk to tray size. Falls back to the
+  // embedded placeholder PNG when no icon.png has been dropped in yet.
+  const iconPath = appIconPath()
+  const icon = iconPath
+    ? nativeImage.createFromPath(iconPath).resize({ width: 18, height: 18 })
+    : nativeImage.createFromDataURL(TRAY_ICON_DATA_URL)
   const t = new Tray(icon)
   t.setToolTip('Discord Big Picture')
   t.setContextMenu(
