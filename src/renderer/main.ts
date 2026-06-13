@@ -121,9 +121,9 @@ function renderRow(row: Row): HTMLElement {
   name.textContent = row.name
   el.appendChild(name)
 
-  // The channel you're actually in gets inline mouse controls so you can mute
-  // or leave without the controller. Buttons stop propagation so they don't
-  // also trigger the row's click-to-join.
+  // The channel you're actually in gets inline mouse controls so you can mute,
+  // deafen, or leave without the controller. Buttons stop propagation so they
+  // don't also trigger the row's click-to-join.
   if (row.isCurrent) {
     const controls = document.createElement('div')
     controls.className = 'row-controls'
@@ -136,6 +136,14 @@ function renderRow(row: Row): HTMLElement {
       void window.api.setMute(!state.muted)
     })
 
+    const deafenBtn = document.createElement('button')
+    deafenBtn.className = 'row-btn'
+    deafenBtn.textContent = state.deafened ? 'Undeafen' : 'Deafen'
+    deafenBtn.addEventListener('click', (event) => {
+      event.stopPropagation()
+      void window.api.setDeafen(!state.deafened)
+    })
+
     const leaveBtn = document.createElement('button')
     leaveBtn.className = 'row-btn row-btn--leave'
     leaveBtn.textContent = 'Leave'
@@ -144,7 +152,7 @@ function renderRow(row: Row): HTMLElement {
       void window.api.disconnect()
     })
 
-    controls.append(muteBtn, leaveBtn)
+    controls.append(muteBtn, deafenBtn, leaveBtn)
     el.appendChild(controls)
   }
 
