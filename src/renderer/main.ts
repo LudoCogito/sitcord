@@ -3,6 +3,7 @@ import { buildView, type Row } from './render'
 import { navigate } from './navigation'
 import { startGamepadLoop, startKeyboardFallback, type InputAction } from './gamepad'
 import { adjustScale } from './scale'
+import { buildLegend, detectController, type ControllerKind } from './controller-profile'
 import type { AppState } from '../shared/ipc'
 
 // Root font size at scale 1.0; the rem-based stylesheet scales off this so the
@@ -113,6 +114,42 @@ function renderRow(row: Row): HTMLElement {
   return el
 }
 
+// Pick the legend's glyph set from the first connected gamepad's id. With no
+// controller (keyboard dev) this returns 'generic', i.e. the A/B/X/Y default.
+function detectConnectedController(): ControllerKind {
+  for (const gamepad of navigator.getGamepads()) {
+    if (gamepad) return detectController(gamepad.id)
+  }
+  return 'generic'
+}
+
+// The bottom legend as wrap-friendly chips ([A] Join, [✕] Join, …) instead of
+// one overflowing line. The whole bar stays a drag region; the chips are
+// non-interactive so they inherit it.
+function renderLegend(mode: 'menu' | 'channels'): HTMLElement {
+  const legend = document.createElement('div')
+  legend.className = 'legend'
+
+  const kind = detectConnectedController()
+  for (const entry of buildLegend(kind, mode)) {
+    const chip = document.createElement('span')
+    chip.className = 'legend-chip'
+
+    const icon = document.createElement('span')
+    icon.className = 'legend-icon'
+    icon.textContent = entry.icon
+
+    const label = document.createElement('span')
+    label.className = 'legend-label'
+    label.textContent = entry.label
+
+    chip.append(icon, label)
+    legend.appendChild(chip)
+  }
+
+  return legend
+}
+
 function renderMenu(): HTMLElement {
   const wrap = document.createElement('div')
   wrap.className = 'menu'
@@ -158,13 +195,9 @@ function render(): void {
   status.textContent = state.status
   app.appendChild(status)
 
-  const legend = document.createElement('div')
-  legend.className = 'legend'
-
   if (isMenuMode()) {
     app.appendChild(renderMenu())
-    legend.textContent = 'A Select · LT/RT Zoom · R3+LB Minimize · Select+Start Show/Hide'
-    app.appendChild(legend)
+    app.appendChild(renderLegend('menu'))
     return
   }
 
@@ -195,9 +228,7 @@ function render(): void {
   // rows — essential for couch/controller use where only a few rows fit.
   selectedEl?.scrollIntoView({ block: 'nearest' })
 
-  legend.textContent =
-    'A Join · B Disconnect · X Mute · Y Deafen · Start Favorite · LT/RT Zoom · R3+LB Minimize · Select+Start Show/Hide'
-  app.appendChild(legend)
+  app.appendChild(renderLegend('channels'))
 }
 
 function selectedChannelId(): string | null {
@@ -282,6 +313,10 @@ window.api.onStateUpdate((next) => {
 
 startGamepadLoop(handleAction)
 startKeyboardFallback(handleAction)
+
+// Re-render so the legend adopts the glyphs of whatever just (dis)connected.
+window.addEventListener('gamepadconnected', render)
+window.addEventListener('gamepaddisconnected', render)
 
 applyScale()
 render()
