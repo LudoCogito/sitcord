@@ -35,6 +35,28 @@ let state: AppState = {
 let selectionIndex = 0
 let menuIndex = 0
 
+// Which server groups are collapsed (their channels hidden), keyed by guildId.
+// Persisted renderer-side like the zoom scale, so it survives reloads with no
+// main-process plumbing.
+const COLLAPSED_STORAGE_KEY = 'collapsedGuilds'
+
+function loadCollapsed(): Set<string> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(COLLAPSED_STORAGE_KEY) ?? '[]')
+    return new Set(Array.isArray(parsed) ? (parsed as string[]) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+const collapsed = loadCollapsed()
+
+function toggleCollapse(guildId: string): void {
+  if (collapsed.has(guildId)) collapsed.delete(guildId)
+  else collapsed.add(guildId)
+  localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsed]))
+}
+
 // Shown when there are no channels to list (Discord not connected). These are
 // controller-focusable: UP/DOWN move between them, A activates the highlighted
 // one.
@@ -56,7 +78,8 @@ function clampMenu(): void {
 }
 
 function clampSelection(): void {
-  const count = channelCount(state)
+  // Selection indexes the visible rows (headers + non-collapsed channels).
+  const count = buildView(state, 0, collapsed).length
   selectionIndex = count === 0 ? 0 : Math.min(Math.max(selectionIndex, 0), count - 1)
 }
 
@@ -64,7 +87,26 @@ function renderRow(row: Row): HTMLElement {
   if (row.kind === 'header') {
     const el = document.createElement('div')
     el.className = 'group-header'
-    el.textContent = row.guildName
+    if (row.isSelected) el.classList.add('selected')
+    if (row.isCollapsed) el.classList.add('collapsed')
+
+    const chevron = document.createElement('span')
+    chevron.className = 'group-chevron'
+    chevron.textContent = row.isCollapsed ? '▸' : '▾'
+    el.appendChild(chevron)
+
+    const name = document.createElement('span')
+    name.className = 'group-name'
+    name.textContent = row.guildName
+    el.appendChild(name)
+
+    // While collapsed, show how many channels are hidden so the group still
+    // reads as "there's stuff in here".
+    const count = document.createElement('span')
+    count.className = 'group-count'
+    count.textContent = row.isCollapsed ? String(row.channelCount) : ''
+    el.appendChild(count)
+
     return el
   }
 
@@ -203,13 +245,17 @@ function render(): void {
 
   const list = document.createElement('div')
   list.className = 'channel-list'
-  let selectedEl: HTMLElement | null = null
-  let channelIndex = 0
-  for (const row of buildView(state, selectionIndex)) {
+  buildView(state, selectionIndex, collapsed).forEach((row, index) => {
     const el = renderRow(row)
-    if (row.kind === 'channel') {
-      if (row.isSelected) selectedEl = el
-      const index = channelIndex
+    if (row.kind === 'header') {
+      const guildId = row.guildId
+      // Clicking a server header selects it and toggles its collapse.
+      el.addEventListener('click', () => {
+        selectionIndex = index
+        toggleCollapse(guildId)
+        render()
+      })
+    } else {
       const channelId = row.channelId
       // Clicking a channel both moves the selection there and joins it — the
       // primary mouse action for a voice switcher.
@@ -218,26 +264,22 @@ function render(): void {
         void window.api.join(channelId)
         render()
       })
-      channelIndex++
     }
     list.appendChild(el)
-  }
+  })
   app.appendChild(list)
   app.appendChild(renderLegend('channels'))
 
   // Scroll the selection into view *after* the legend is in the DOM. The list
   // is flex:1, so before the legend exists it's laid out one legend-height too
   // tall; scrolling then would park a near-bottom row where the legend lands
-  // and the legend would clip it out of view. Keeping the highlighted channel
+  // and the legend would clip it out of view. Keeping the highlighted row
   // visible matters most for couch/controller use where only a few rows fit.
-  selectedEl?.scrollIntoView({ block: 'nearest' })
+  list.querySelector('.selected')?.scrollIntoView({ block: 'nearest' })
 }
 
-function selectedChannelId(): string | null {
-  const row = buildView(state, selectionIndex).find(
-    (r): r is Row & { kind: 'channel' } => r.kind === 'channel' && r.isSelected
-  )
-  return row?.channelId ?? null
+function selectedRow(): Row | null {
+  return buildView(state, selectionIndex, collapsed)[selectionIndex] ?? null
 }
 
 function handleAction(action: InputAction): void {
@@ -271,14 +313,20 @@ function handleAction(action: InputAction): void {
 
   switch (action.type) {
     case 'nav': {
-      const rows = buildView(state, selectionIndex)
+      const rows = buildView(state, selectionIndex, collapsed)
       selectionIndex = navigate({ rows, selectionIndex }, action.action).selectionIndex
       render()
       break
     }
     case 'join': {
-      const channelId = selectedChannelId()
-      if (channelId) void window.api.join(channelId)
+      // A on a server header collapses/expands it; on a channel it joins.
+      const row = selectedRow()
+      if (row?.kind === 'header') {
+        toggleCollapse(row.guildId)
+        render()
+      } else if (row?.kind === 'channel') {
+        void window.api.join(row.channelId)
+      }
       break
     }
     case 'disconnect':
@@ -291,8 +339,8 @@ function handleAction(action: InputAction): void {
       void window.api.setDeafen(!state.deafened)
       break
     case 'toggleFavorite': {
-      const channelId = selectedChannelId()
-      if (channelId) void window.api.toggleFavorite(channelId)
+      const row = selectedRow()
+      if (row?.kind === 'channel') void window.api.toggleFavorite(row.channelId)
       break
     }
     case 'toggleVisibility':

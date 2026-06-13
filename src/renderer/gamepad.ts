@@ -1,4 +1,5 @@
 import type { NavAction } from './navigation'
+import { stepRepeat, initialRepeatState, type RepeatState } from './auto-repeat'
 
 export type InputAction =
   | { type: 'nav'; action: NavAction }
@@ -38,6 +39,7 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
   let stopped = false
   const wasPressed = new Map<string, boolean>()
   const stickDirection = new Map<number, 'up' | 'down' | null>()
+  const stickRepeat = new Map<number, RepeatState>()
 
   function fireOnPress(gamepad: Gamepad, buttonIndex: number, action: InputAction): void {
     const key = `${gamepad.index}:${buttonIndex}`
@@ -46,24 +48,33 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
     wasPressed.set(key, isPressed)
   }
 
-  function pollStick(gamepad: Gamepad): void {
+  // Holding the stick auto-repeats with acceleration (fire, pause, then ramp
+  // from slow to fast) so a long channel list scrolls quickly. Flipping the
+  // stick to the opposite direction restarts the ramp so the new direction
+  // fires at once.
+  function pollStick(gamepad: Gamepad, now: number): void {
     const y = gamepad.axes[AXIS_LEFT_STICK_Y] ?? 0
-    const previous = stickDirection.get(gamepad.index) ?? null
+    const direction = y < -STICK_DEADZONE ? 'up' : y > STICK_DEADZONE ? 'down' : null
 
-    if (y < -STICK_DEADZONE) {
-      if (previous !== 'up') onAction({ type: 'nav', action: 'UP' })
-      stickDirection.set(gamepad.index, 'up')
-    } else if (y > STICK_DEADZONE) {
-      if (previous !== 'down') onAction({ type: 'nav', action: 'DOWN' })
-      stickDirection.set(gamepad.index, 'down')
-    } else {
+    if (direction === null) {
       stickDirection.set(gamepad.index, null)
+      stickRepeat.set(gamepad.index, initialRepeatState)
+      return
     }
+
+    const sameDirection = direction === (stickDirection.get(gamepad.index) ?? null)
+    const prev = sameDirection ? stickRepeat.get(gamepad.index) ?? initialRepeatState : initialRepeatState
+    stickDirection.set(gamepad.index, direction)
+
+    const { state, fire } = stepRepeat(prev, true, now)
+    stickRepeat.set(gamepad.index, state)
+    if (fire) onAction({ type: 'nav', action: direction === 'up' ? 'UP' : 'DOWN' })
   }
 
   function poll(): void {
     if (stopped) return
 
+    const now = performance.now()
     for (const gamepad of navigator.getGamepads()) {
       if (!gamepad) continue
 
@@ -93,7 +104,7 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
       if (windowChord && !wasPressed.get(windowChordKey)) onAction({ type: 'minimize' })
       wasPressed.set(windowChordKey, windowChord)
 
-      pollStick(gamepad)
+      pollStick(gamepad, now)
     }
 
     requestAnimationFrame(poll)

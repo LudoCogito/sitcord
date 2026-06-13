@@ -68,7 +68,11 @@ The app now shows up in your Steam Library like any other game.
 From Steam's Big Picture Mode, the app appears in your library and launches
 like any other entry. Once launched it opens as a small always-on-top window:
 
-- Navigate with the D-pad/left stick, switch servers with the bumpers.
+- Navigate with the D-pad/left stick (hold the stick to scroll faster — it
+  accelerates), switch servers with the bumpers.
+- Selecting a **server header** and pressing **A** collapses/expands that
+  server, hiding channels you don't use so you scroll past less. Collapsed
+  servers show a ▸ and the hidden-channel count, and the state is remembered.
 - **A** joins the selected channel, **B** disconnects, **X**/**Y** toggle
   mute/deafen, **Start** toggles favorite, **LT/RT** zoom the UI in/out for
   your viewing distance.

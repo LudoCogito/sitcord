@@ -4,6 +4,9 @@ export interface HeaderRow {
   kind: 'header'
   guildId: string
   guildName: string
+  channelCount: number
+  isCollapsed: boolean
+  isSelected: boolean
 }
 
 export interface ChannelRow {
@@ -19,12 +22,34 @@ export interface ChannelRow {
 
 export type Row = HeaderRow | ChannelRow
 
-export function buildView(state: AppState, selectionIndex: number): Row[] {
+/**
+ * Flatten the grouped state into the rendered/navigable row list. Selection is
+ * a single index over *all* rows — both server headers and channels are
+ * landable, so a header can be selected to collapse/expand its group. Channels
+ * of a collapsed group (`collapsed` holds its guildId) are omitted entirely, so
+ * they drop out of both the DOM and navigation.
+ */
+export function buildView(
+  state: AppState,
+  selectionIndex: number,
+  collapsed: Set<string> = new Set()
+): Row[] {
   const rows: Row[] = []
-  let channelIndex = 0
+  let rowIndex = 0
 
   for (const group of state.groups) {
-    rows.push({ kind: 'header', guildId: group.guildId, guildName: group.guildName })
+    const isCollapsed = collapsed.has(group.guildId)
+    rows.push({
+      kind: 'header',
+      guildId: group.guildId,
+      guildName: group.guildName,
+      channelCount: group.channels.length,
+      isCollapsed,
+      isSelected: rowIndex === selectionIndex
+    })
+    rowIndex++
+
+    if (isCollapsed) continue
 
     for (const channel of group.channels) {
       rows.push({
@@ -35,9 +60,9 @@ export function buildView(state: AppState, selectionIndex: number): Row[] {
         occupancy: state.occupancy[channel.id] ?? 0,
         isFavorite: state.favorites.includes(channel.id),
         isCurrent: state.currentChannelId === channel.id,
-        isSelected: channelIndex === selectionIndex
+        isSelected: rowIndex === selectionIndex
       })
-      channelIndex++
+      rowIndex++
     }
   }
 

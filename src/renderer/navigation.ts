@@ -7,33 +7,22 @@ export interface NavState {
 
 export type NavAction = 'UP' | 'DOWN' | 'GROUP_PREV' | 'GROUP_NEXT'
 
-function channelCount(rows: Row[]): number {
-  return rows.filter((row) => row.kind === 'channel').length
+/** Row indices of the server headers, in order. */
+function headerIndices(rows: Row[]): number[] {
+  const indices: number[] = []
+  rows.forEach((row, i) => {
+    if (row.kind === 'header') indices.push(i)
+  })
+  return indices
 }
 
-/** Channel-index (skipping headers) of the first channel in each group, in order. */
-function groupStarts(rows: Row[]): number[] {
-  const starts: number[] = []
-  let channelIndex = 0
-  let pendingHeader = false
-
-  for (const row of rows) {
-    if (row.kind === 'header') {
-      pendingHeader = true
-      continue
-    }
-    if (pendingHeader) {
-      starts.push(channelIndex)
-      pendingHeader = false
-    }
-    channelIndex++
-  }
-
-  return starts
-}
-
+/**
+ * Pure selection reducer over the flat row list. UP/DOWN step one row at a time
+ * (headers are landable, so you can select a server to collapse it). The
+ * bumpers (GROUP_PREV/GROUP_NEXT) jump between server headers.
+ */
 export function navigate(state: NavState, action: NavAction): NavState {
-  const count = channelCount(state.rows)
+  const count = state.rows.length
   if (count === 0) return state
 
   switch (action) {
@@ -43,15 +32,18 @@ export function navigate(state: NavState, action: NavAction): NavState {
       return { ...state, selectionIndex: Math.min(count - 1, state.selectionIndex + 1) }
     case 'GROUP_PREV':
     case 'GROUP_NEXT': {
-      const starts = groupStarts(state.rows)
+      const headers = headerIndices(state.rows)
+      if (headers.length === 0) return state
+
+      // The group we're in = the last header at or before the selection.
       let currentGroup = 0
-      for (let i = 0; i < starts.length; i++) {
-        if (starts[i] <= state.selectionIndex) currentGroup = i
+      for (let i = 0; i < headers.length; i++) {
+        if (headers[i] <= state.selectionIndex) currentGroup = i
         else break
       }
       const targetGroup = action === 'GROUP_NEXT' ? currentGroup + 1 : currentGroup - 1
-      if (targetGroup < 0 || targetGroup >= starts.length) return state
-      return { ...state, selectionIndex: starts[targetGroup] }
+      if (targetGroup < 0 || targetGroup >= headers.length) return state
+      return { ...state, selectionIndex: headers[targetGroup] }
     }
   }
 }
