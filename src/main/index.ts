@@ -79,6 +79,8 @@ function launchDiscord(): void {
 
 // Held so it isn't garbage-collected (which would remove the icon).
 let tray: Tray | null = null
+// Module-scoped so the single-instance `second-instance` handler can summon it.
+let mainWindow: BrowserWindow | null = null
 
 function createTray(window: BrowserWindow): Tray {
   const icon = nativeImage.createFromDataURL(TRAY_ICON_DATA_URL)
@@ -164,19 +166,33 @@ function startService(mainWindow: BrowserWindow, store: AppStore): DiscordServic
   return service
 }
 
-app.whenReady().then(() => {
-  const store = new AppStore()
-  const mainWindow = createWindow(store)
-  startService(mainWindow, store)
-  tray = createTray(mainWindow)
-
-  globalShortcut.register(TOGGLE_VISIBILITY_SHORTCUT, () => toggleVisibility(mainWindow))
-  globalShortcut.register(TOGGLE_MINIMIZE_SHORTCUT, () => toggleMinimize(mainWindow))
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow(store)
+// Only one copy may run. If a second launch happens — e.g. selecting the
+// pinned entry again from Steam Big Picture while it's already in the tray —
+// the running instance catches `second-instance` and summons itself instead of
+// opening a duplicate (the duplicate quits immediately). This is what lets
+// "navigate to it in Big Picture" act as a focus.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) showWindow(mainWindow)
   })
-})
+
+  app.whenReady().then(() => {
+    const store = new AppStore()
+    const win = createWindow(store)
+    mainWindow = win
+    startService(win, store)
+    tray = createTray(win)
+
+    globalShortcut.register(TOGGLE_VISIBILITY_SHORTCUT, () => toggleVisibility(win))
+    globalShortcut.register(TOGGLE_MINIMIZE_SHORTCUT, () => toggleMinimize(win))
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow(store)
+    })
+  })
+}
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()

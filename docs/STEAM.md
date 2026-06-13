@@ -95,6 +95,13 @@ summon it from there. Three reliable ways to bring it back regardless:
   toggle the window.
 - **Global hotkeys** — `Ctrl/Cmd + Shift + backtick` shows/hides it from any
   app; `Ctrl/Cmd + Shift + M` minimizes/restores it.
+- **Re-select it from Big Picture** — the most game-independent path, with no
+  per-game setup: press the Guide button to open Big Picture, then pick the
+  pinned Discord Big Picture entry. The app only ever runs one copy, so a second
+  launch is caught and turned into "bring the running window to the front"
+  rather than opening a duplicate. (Works as long as Steam still offers **Play**
+  for the entry; if Steam has it marked as running with **Stop**, use a hotkey
+  or the tray instead.)
 - **Steam Input chord** — map a controller button/chord to send one of the
   global hotkeys above, so a controller combo summons or minimizes the window
   even mid-game. Step-by-step below.
