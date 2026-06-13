@@ -87,7 +87,7 @@ body {
 
 .group-header {
   padding: 0.7rem 0.7rem 0.3rem;
-  font-size: 0.62rem;
+  font-size: 0.74rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -118,9 +118,44 @@ body {
 }
 
 .channel-name {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.row-controls {
+  display: flex;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+}
+
+.row-btn {
+  font: inherit;
+  font-size: 0.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.14);
+  border: none;
+  border-radius: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.row-btn:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.row-btn--leave {
+  color: #fff;
+  background: var(--danger);
+}
+
+.row-btn--leave:hover {
+  background: #ff5c5e;
 }
 
 .channel-row.current .channel-name {

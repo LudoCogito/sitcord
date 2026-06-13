@@ -76,12 +76,40 @@ function renderRow(row: Row): HTMLElement {
   const name = document.createElement('span')
   name.className = 'channel-name'
   name.textContent = row.name
+  el.appendChild(name)
+
+  // The channel you're actually in gets inline mouse controls so you can mute
+  // or leave without the controller. Buttons stop propagation so they don't
+  // also trigger the row's click-to-join.
+  if (row.isCurrent) {
+    const controls = document.createElement('div')
+    controls.className = 'row-controls'
+
+    const muteBtn = document.createElement('button')
+    muteBtn.className = 'row-btn'
+    muteBtn.textContent = state.muted ? 'Unmute' : 'Mute'
+    muteBtn.addEventListener('click', (event) => {
+      event.stopPropagation()
+      void window.api.setMute(!state.muted)
+    })
+
+    const leaveBtn = document.createElement('button')
+    leaveBtn.className = 'row-btn row-btn--leave'
+    leaveBtn.textContent = 'Leave'
+    leaveBtn.addEventListener('click', (event) => {
+      event.stopPropagation()
+      void window.api.disconnect()
+    })
+
+    controls.append(muteBtn, leaveBtn)
+    el.appendChild(controls)
+  }
 
   const occupancy = document.createElement('span')
   occupancy.className = 'channel-occupancy'
   occupancy.textContent = String(row.occupancy)
+  el.appendChild(occupancy)
 
-  el.append(name, occupancy)
   return el
 }
 
