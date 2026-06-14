@@ -10,6 +10,7 @@ export type InputAction =
   | { type: 'toggleFavorite' }
   | { type: 'toggleVisibility' }
   | { type: 'minimize' }
+  | { type: 'toggleHelp' }
   | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
 
 export type InputHandler = (action: InputAction) => void
@@ -27,6 +28,8 @@ const BUTTON_X = 2
 const BUTTON_Y = 3
 const BUTTON_LEFT_TRIGGER = 6
 const BUTTON_RIGHT_TRIGGER = 7
+// Back/View/Share (PlayStation "Create") button — opens the settings drawer.
+const BUTTON_SELECT = 8
 const BUTTON_START = 9
 // Right-stick click. Too easy to hit by accident on its own, but paired with LB
 // it's a deliberate chord — and it dodges the LB+RB combo that games lean on.
@@ -89,6 +92,7 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
       fireOnPress(gamepad, BUTTON_LEFT_TRIGGER, { type: 'zoom', direction: 'out' })
       fireOnPress(gamepad, BUTTON_RIGHT_TRIGGER, { type: 'zoom', direction: 'in' })
       fireOnPress(gamepad, BUTTON_START, { type: 'toggleFavorite' })
+      fireOnPress(gamepad, BUTTON_SELECT, { type: 'toggleHelp' })
 
       // LB + R3 together = show/hide the window — the single window toggle. A
       // deliberate two-button chord that won't happen by accident, and it
@@ -129,6 +133,7 @@ const KEY_ACTIONS: Record<string, InputAction> = {
   x: { type: 'toggleMute' },
   y: { type: 'toggleDeafen' },
   f: { type: 'toggleFavorite' },
+  h: { type: 'toggleHelp' },
   Tab: { type: 'toggleVisibility' },
   '-': { type: 'zoom', direction: 'out' },
   '=': { type: 'zoom', direction: 'in' },

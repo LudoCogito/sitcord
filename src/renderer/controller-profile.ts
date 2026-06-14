@@ -101,3 +101,13 @@ export function buildLegend(kind: ControllerKind, mode: 'menu' | 'channels'): Le
     showHide
   ]
 }
+
+/**
+ * The single chip shown in the (otherwise empty) bottom bar: the Select button
+ * opens the settings/help drawer that holds the full control list. Reads
+ * "Close" while that drawer is open so the same button dismisses it.
+ */
+export function settingsChip(kind: ControllerKind, open: boolean): LegendEntry {
+  const g = glyphsFor(kind)
+  return { icon: g.select, label: open ? 'Close' : 'Settings' }
+}

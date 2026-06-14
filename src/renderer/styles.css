@@ -41,6 +41,16 @@ body {
   height: 100vh;
 }
 
+/* Holds the list (or menu) and is the positioning context for the settings
+   drawer, which anchors to its bottom edge — just above the legend bar. */
+.content {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .titlebar {
   display: flex;
   align-items: center;
@@ -84,7 +94,9 @@ body {
 .menu-button,
 .channel-row,
 .channel-list,
-.group-header {
+.group-header,
+.legend-chip--button,
+.help-backdrop {
   -webkit-app-region: no-drag;
 }
 
@@ -352,4 +364,71 @@ body {
 .legend-label {
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* The lone bottom-bar chip is clickable (opens the settings drawer). */
+.legend-chip--button {
+  cursor: pointer;
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.2rem;
+}
+
+.legend-chip--button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Settings/help drawer: dim backdrop with a panel slid up from the bottom. */
+.help-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.help-panel {
+  background: var(--bg-alt);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top-left-radius: 0.6rem;
+  border-top-right-radius: 0.6rem;
+  box-shadow: 0 -0.4rem 1rem rgba(0, 0, 0, 0.4);
+  max-height: 85%;
+  overflow-y: auto;
+  padding: 0.7rem 0.9rem 0.9rem;
+}
+
+.help-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  margin-bottom: 0.5rem;
+}
+
+.help-section-label {
+  font-size: 0.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  margin-bottom: 0.3rem;
+}
+
+.help-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.help-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.2rem;
+}
+
+.help-label {
+  font-size: 0.62rem;
+  color: var(--fg);
 }

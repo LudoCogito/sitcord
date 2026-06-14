@@ -3,7 +3,7 @@ import { buildView, type Row } from './render'
 import { navigate } from './navigation'
 import { startGamepadLoop, startKeyboardFallback, type InputAction } from './gamepad'
 import { adjustScale } from './scale'
-import { buildLegend, detectController, type ControllerKind } from './controller-profile'
+import { buildLegend, settingsChip, detectController, type ControllerKind } from './controller-profile'
 import type { AppState } from '../shared/ipc'
 
 // Root font size at scale 1.0; the rem-based stylesheet scales off this so the
@@ -37,6 +37,17 @@ let state: AppState = {
 }
 let selectionIndex = 0
 let menuIndex = 0
+
+// Whether the bottom settings/help drawer is open. The bottom bar otherwise
+// shows just the single "Settings" chip; this drawer holds the full control
+// list (and is where future optional settings live).
+let helpOpen = false
+
+// Which row index currently carries the `.selected` highlight in the live DOM.
+// Lets a pure selection move relocate the highlight in place (moveSelection)
+// instead of rebuilding the whole list — the rebuild was firing ~35x/sec during
+// accelerating stick-scroll and was the source of the lag. -1 = no list in DOM.
+let domSelectionIndex = -1
 
 // Which server groups are collapsed (their channels hidden), keyed by guildId.
 // Persisted renderer-side like the zoom scale, so it survives reloads with no
@@ -210,31 +221,78 @@ function detectConnectedController(): ControllerKind {
   return 'generic'
 }
 
-// The bottom legend as wrap-friendly chips ([A] Join, [✕] Join, …) instead of
-// one overflowing line. The whole bar stays a drag region; the chips are
-// non-interactive so they inherit it.
-function renderLegend(mode: 'menu' | 'channels'): HTMLElement {
+// A single {icon,label} chip ([Select] Settings, etc.). Used for the lone
+// bottom-bar chip and (with bigger styling) for each row of the drawer.
+function makeChip(entry: { icon: string; label: string }, labelClass: string): HTMLElement {
+  const icon = document.createElement('span')
+  icon.className = 'legend-icon'
+  icon.textContent = entry.icon
+
+  const label = document.createElement('span')
+  label.className = labelClass
+  label.textContent = entry.label
+
+  const chip = document.createElement('span')
+  chip.append(icon, label)
+  return chip
+}
+
+// The bottom bar is now a single clean row: just the Select button mapped to
+// "Settings" (→ "Close" while open), which toggles the drawer. The bar stays a
+// drag region; the chip opts out so it's clickable.
+function renderLegend(): HTMLElement {
   const legend = document.createElement('div')
   legend.className = 'legend'
 
   const kind = detectConnectedController()
-  for (const entry of buildLegend(kind, mode)) {
-    const chip = document.createElement('span')
-    chip.className = 'legend-chip'
+  const chip = makeChip(settingsChip(kind, helpOpen), 'legend-label')
+  chip.className = 'legend-chip legend-chip--button'
+  chip.addEventListener('click', () => {
+    helpOpen = !helpOpen
+    render()
+  })
 
-    const icon = document.createElement('span')
-    icon.className = 'legend-icon'
-    icon.textContent = entry.icon
-
-    const label = document.createElement('span')
-    label.className = 'legend-label'
-    label.textContent = entry.label
-
-    chip.append(icon, label)
-    legend.appendChild(chip)
-  }
-
+  legend.appendChild(chip)
   return legend
+}
+
+// The settings/help drawer: a bottom-anchored panel (over a dim backdrop)
+// listing every control one per row. Future optional settings get added to this
+// same list. Clicking the backdrop closes it; clicking the panel doesn't.
+function renderHelpDrawer(mode: 'menu' | 'channels'): HTMLElement {
+  const backdrop = document.createElement('div')
+  backdrop.className = 'help-backdrop'
+  backdrop.addEventListener('click', () => {
+    helpOpen = false
+    render()
+  })
+
+  const panel = document.createElement('div')
+  panel.className = 'help-panel'
+  panel.addEventListener('click', (event) => event.stopPropagation())
+
+  const title = document.createElement('div')
+  title.className = 'help-title'
+  title.textContent = 'Settings'
+  panel.appendChild(title)
+
+  const section = document.createElement('div')
+  section.className = 'help-section-label'
+  section.textContent = 'Controls'
+  panel.appendChild(section)
+
+  const kind = detectConnectedController()
+  const listEl = document.createElement('div')
+  listEl.className = 'help-list'
+  for (const entry of buildLegend(kind, mode)) {
+    const row = makeChip(entry, 'help-label')
+    row.className = 'help-row'
+    listEl.appendChild(row)
+  }
+  panel.appendChild(listEl)
+
+  backdrop.appendChild(panel)
+  return backdrop
 }
 
 function renderMenu(): HTMLElement {
@@ -293,10 +351,18 @@ function render(): void {
   app.appendChild(titlebar)
 
   if (isMenuMode()) {
-    app.appendChild(renderMenu())
-    app.appendChild(renderLegend('menu'))
+    const content = document.createElement('div')
+    content.className = 'content'
+    content.appendChild(renderMenu())
+    if (helpOpen) content.appendChild(renderHelpDrawer('menu'))
+    app.appendChild(content)
+    app.appendChild(renderLegend())
+    domSelectionIndex = -1 // no channel list in the DOM
     return
   }
+
+  const content = document.createElement('div')
+  content.className = 'content'
 
   const list = document.createElement('div')
   list.className = 'channel-list'
@@ -322,15 +388,40 @@ function render(): void {
     }
     list.appendChild(el)
   })
-  app.appendChild(list)
-  app.appendChild(renderLegend('channels'))
+  content.appendChild(list)
+  if (helpOpen) content.appendChild(renderHelpDrawer('channels'))
+  app.appendChild(content)
+  app.appendChild(renderLegend())
 
   // Scroll the selection into view *after* the legend is in the DOM. The list
   // is flex:1, so before the legend exists it's laid out one legend-height too
   // tall; scrolling then would park a near-bottom row where the legend lands
   // and the legend would clip it out of view. Keeping the highlighted row
   // visible matters most for couch/controller use where only a few rows fit.
-  list.querySelector('.selected')?.scrollIntoView({ block: 'nearest' })
+  // (Skip while the drawer covers the list.)
+  if (!helpOpen) list.querySelector('.selected')?.scrollIntoView({ block: 'nearest' })
+  domSelectionIndex = selectionIndex // DOM highlight now matches the selection
+}
+
+// Light-weight selection move: relocate the `.selected` highlight between the
+// already-rendered rows instead of tearing down and rebuilding the whole list.
+// Falls back to a full render if the list isn't in the DOM (menu mode, etc.).
+function moveSelection(): void {
+  const list = document.querySelector<HTMLElement>('.channel-list')
+  if (!list || list.children.length === 0) {
+    render()
+    return
+  }
+  clampSelection()
+  if (selectionIndex === domSelectionIndex) return
+
+  list.children[domSelectionIndex]?.classList.remove('selected')
+  const next = list.children[selectionIndex]
+  if (next) {
+    next.classList.add('selected')
+    next.scrollIntoView({ block: 'nearest' })
+  }
+  domSelectionIndex = selectionIndex
 }
 
 function selectedRow(): Row | null {
@@ -338,6 +429,22 @@ function selectedRow(): Row | null {
 }
 
 function handleAction(action: InputAction): void {
+  // Settings/help drawer takes priority: Select toggles it from anywhere, and
+  // while it's open the only other input that does anything is B/Esc (close),
+  // so it acts as a modal layer over the channel list.
+  if (action.type === 'toggleHelp') {
+    helpOpen = !helpOpen
+    render()
+    return
+  }
+  if (helpOpen) {
+    if (action.type === 'disconnect') {
+      helpOpen = false
+      render()
+    }
+    return
+  }
+
   // In menu mode (no channels / not connected) only navigation, activation,
   // zoom and show/hide apply — the rest need a live Discord connection.
   if (isMenuMode()) {
@@ -370,7 +477,7 @@ function handleAction(action: InputAction): void {
     case 'nav': {
       const rows = buildView(state, selectionIndex, collapsed)
       selectionIndex = navigate({ rows, selectionIndex }, action.action).selectionIndex
-      render()
+      moveSelection() // just relocate the highlight; no full rebuild
       break
     }
     case 'join': {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectController, glyphsFor, buildLegend } from './controller-profile'
+import { detectController, glyphsFor, buildLegend, settingsChip } from './controller-profile'
 
 describe('detectController', () => {
   it('detects Xbox controllers from the gamepad id', () => {
@@ -78,5 +78,16 @@ describe('buildLegend', () => {
     expect(buildLegend('playstation', 'channels').find((e) => e.label === 'Show/Hide')?.icon).toBe(
       'L1+R3'
     )
+  })
+})
+
+describe('settingsChip', () => {
+  it('maps the Select button to Settings, and to Close while open', () => {
+    expect(settingsChip('xbox', false)).toEqual({ icon: 'Select', label: 'Settings' })
+    expect(settingsChip('xbox', true)).toEqual({ icon: 'Select', label: 'Close' })
+  })
+
+  it('uses the PlayStation Create glyph for the Select button', () => {
+    expect(settingsChip('playstation', false)).toEqual({ icon: 'Create', label: 'Settings' })
   })
 })
