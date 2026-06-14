@@ -103,10 +103,35 @@ function launchDiscord(): void {
 
 // Held so it isn't garbage-collected (which would remove the icon).
 let tray: Tray | null = null
-// Module-scoped so the single-instance `second-instance` handler can summon it.
+// Module-scoped so handlers, the tray, global shortcuts and the single-instance
+// handler all target the *current* window. On macOS closing the window destroys
+// it without quitting the app, so the window can come and go — never capture a
+// specific instance in a long-lived closure.
 let mainWindow: BrowserWindow | null = null
+let appStore: AppStore | null = null
+// Last state the service pushed, replayed to a freshly (re)opened window so it
+// reflects the live connection instead of being stuck on "connecting".
+let lastState: AppState | null = null
 
-function createTray(window: BrowserWindow): Tray {
+// Single funnel for state pushes. Guards against a destroyed window (the bug
+// behind "Object has been destroyed" on retry after a close/reopen).
+function sendState(state: AppState): void {
+  lastState = state
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC.STATE_UPDATE, state)
+  }
+}
+
+// The live window, recreating it if it was closed/destroyed. Everything that
+// needs to act on "the window" goes through here so it survives a reopen.
+function ensureWindow(): BrowserWindow {
+  if (mainWindow && !mainWindow.isDestroyed()) return mainWindow
+  if (!appStore) appStore = new AppStore()
+  mainWindow = createWindow(appStore)
+  return mainWindow
+}
+
+function createTray(): Tray {
   // Match the app icon (build/icon.png), shrunk to tray size. Falls back to the
   // embedded placeholder PNG when no icon.png has been dropped in yet.
   const iconPath = appIconPath()
@@ -117,14 +142,14 @@ function createTray(window: BrowserWindow): Tray {
   t.setToolTip('Sitcord')
   t.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Show / Hide', click: () => toggleVisibility(window) },
+      { label: 'Show / Hide', click: () => toggleVisibility(ensureWindow()) },
       { type: 'separator' },
       { label: 'Quit', click: () => app.quit() }
     ])
   )
   // Left-click toggles on Windows/Linux; on macOS it opens the menu (which has
   // Show / Hide) — both give a reliable mouse path to summon a hidden window.
-  t.on('click', () => toggleVisibility(window))
+  t.on('click', () => toggleVisibility(ensureWindow()))
   return t
 }
 
@@ -161,7 +186,7 @@ function createWindow(store: AppStore): BrowserWindow {
 
   const iconPath = appIconPath()
 
-  const mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width,
     height,
     x: position.x,
@@ -180,24 +205,30 @@ function createWindow(store: AppStore): BrowserWindow {
     }
   })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  win.on('ready-to-show', () => {
+    win.show()
   })
 
-  mainWindow.on('close', () => {
-    store.setWindowBounds(mainWindow.getBounds())
+  win.on('close', () => {
+    store.setWindowBounds(win.getBounds())
+  })
+
+  // Replay the latest service state to this window once its renderer loads, so a
+  // reopened window picks up the live connection instead of showing "connecting".
+  win.webContents.on('did-finish-load', () => {
+    if (lastState) win.webContents.send(IPC.STATE_UPDATE, lastState)
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  return mainWindow
+  return win
 }
 
-function startService(mainWindow: BrowserWindow, store: AppStore): DiscordService {
+function startService(store: AppStore): DiscordService {
   const rpc = new DiscordRpcClient({ clientId: CLIENT_ID })
 
   const service = new DiscordService({
@@ -205,9 +236,9 @@ function startService(mainWindow: BrowserWindow, store: AppStore): DiscordServic
     store,
     clientId: CLIENT_ID,
     clientSecret: CLIENT_SECRET,
-    onStateUpdate: (state: AppState) => {
-      mainWindow.webContents.send(IPC.STATE_UPDATE, state)
-    }
+    // Funnel through sendState so a closed/destroyed window is skipped rather
+    // than throwing, and the state is cached for the next window that opens.
+    onStateUpdate: sendState
   })
 
   service.start().catch((err) => {
@@ -219,8 +250,8 @@ function startService(mainWindow: BrowserWindow, store: AppStore): DiscordServic
   ipcMain.handle(IPC.VOICE_SET_MUTE, (_event, muted: boolean) => service.setMute(muted))
   ipcMain.handle(IPC.VOICE_SET_DEAFEN, (_event, deafened: boolean) => service.setDeafen(deafened))
   ipcMain.handle(IPC.FAVORITE_TOGGLE, (_event, channelId: string) => service.toggleFavorite(channelId))
-  ipcMain.handle(IPC.WINDOW_TOGGLE, () => toggleVisibility(mainWindow))
-  ipcMain.handle(IPC.WINDOW_MINIMIZE, () => toggleMinimize(mainWindow))
+  ipcMain.handle(IPC.WINDOW_TOGGLE, () => toggleVisibility(ensureWindow()))
+  ipcMain.handle(IPC.WINDOW_MINIMIZE, () => toggleMinimize(ensureWindow()))
   ipcMain.handle(IPC.LAUNCH_DISCORD, () => launchDiscord())
   ipcMain.handle(IPC.RETRY_CONNECTION, () => service.retry())
 
@@ -236,7 +267,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) showWindow(mainWindow)
+    showWindow(ensureWindow())
   })
 
   app.whenReady().then(() => {
@@ -247,18 +278,16 @@ if (!app.requestSingleInstanceLock()) {
       if (iconPath) app.dock?.setIcon(iconPath)
     }
 
-    const store = new AppStore()
-    const win = createWindow(store)
-    mainWindow = win
-    startService(win, store)
-    tray = createTray(win)
+    appStore = new AppStore()
+    mainWindow = createWindow(appStore)
+    startService(appStore)
+    tray = createTray()
 
-    globalShortcut.register(TOGGLE_VISIBILITY_SHORTCUT, () => toggleVisibility(win))
-    globalShortcut.register(TOGGLE_MINIMIZE_SHORTCUT, () => toggleMinimize(win))
+    globalShortcut.register(TOGGLE_VISIBILITY_SHORTCUT, () => toggleVisibility(ensureWindow()))
+    globalShortcut.register(TOGGLE_MINIMIZE_SHORTCUT, () => toggleMinimize(ensureWindow()))
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow(store)
-    })
+    // Dock-icon click on macOS after the window was closed: bring it back.
+    app.on('activate', () => showWindow(ensureWindow()))
   })
 }
 
