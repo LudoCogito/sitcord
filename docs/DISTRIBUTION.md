@@ -1,6 +1,6 @@
 # Distribution & Discord RPC access
 
-Discord Big Picture talks to the local Discord client over its RPC socket
+Sitcord talks to the local Discord client over its RPC socket
 using the `rpc`, `rpc.voice.read`, and `rpc.voice.write` scopes. These scopes
 let an app read and change the user's voice connection (join/leave channels,
 mute/deafen) — Discord treats them as **privileged** and gates them behind

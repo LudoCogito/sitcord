@@ -12,7 +12,7 @@ const BASE_FONT_PX = 22
 const SCALE_STORAGE_KEY = 'uiScale'
 
 // Shown on the left of the titlebar. Keep in sync with package.json productName.
-const APP_NAME = 'Discord Big Picture'
+const APP_NAME = 'Sitcord'
 
 function loadScale(): number {
   const stored = Number(localStorage.getItem(SCALE_STORAGE_KEY))
@@ -111,11 +111,6 @@ function renderRow(row: Row): HTMLElement {
     if (row.isSelected) el.classList.add('selected')
     if (row.isCollapsed) el.classList.add('collapsed')
 
-    const chevron = document.createElement('span')
-    chevron.className = 'group-chevron'
-    chevron.textContent = row.isCollapsed ? '▸' : '▾'
-    el.appendChild(chevron)
-
     // Server icon sits just left of the name. Discord gives a CDN url, or none
     // for iconless servers — those fall back to an acronym tile like Discord's.
     if (row.iconUrl) {
@@ -141,6 +136,13 @@ function renderRow(row: Row): HTMLElement {
     count.className = 'group-count'
     count.textContent = row.isCollapsed ? String(row.channelCount) : ''
     el.appendChild(count)
+
+    // Collapse/expand chevron now sits at the right edge (name flex-grows to
+    // push it there), rather than to the left of the server name.
+    const chevron = document.createElement('span')
+    chevron.className = 'group-chevron'
+    chevron.textContent = row.isCollapsed ? '▸' : '▾'
+    el.appendChild(chevron)
 
     return el
   }

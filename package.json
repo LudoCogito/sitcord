@@ -1,5 +1,5 @@
 {
-  "name": "discord-big-picture",
+  "name": "sitcord",
   "version": "1.0.0",
   "description": "",
   "main": "out/main/index.js",
@@ -24,8 +24,8 @@
     "vitest": "^4.1.8"
   },
   "build": {
-    "appId": "com.dschwarz.discord-big-picture",
-    "productName": "Discord Big Picture",
+    "appId": "com.dschwarz.sitcord",
+    "productName": "Sitcord",
     "asar": true,
     "directories": {
       "output": "dist"

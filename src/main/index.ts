@@ -114,7 +114,7 @@ function createTray(window: BrowserWindow): Tray {
     ? nativeImage.createFromPath(iconPath).resize({ width: 18, height: 18 })
     : nativeImage.createFromDataURL(TRAY_ICON_DATA_URL)
   const t = new Tray(icon)
-  t.setToolTip('Discord Big Picture')
+  t.setToolTip('Sitcord')
   t.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Show / Hide', click: () => toggleVisibility(window) },
