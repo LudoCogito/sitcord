@@ -147,6 +147,25 @@ body {
   background: rgba(88, 101, 242, 0.55);
 }
 
+/* "Picked up" for reordering: a dashed outline + lift so it's clearly grabbed,
+   and the up/down arrows now move the server rather than the selection. */
+.group-header.grabbed {
+  color: #fff;
+  background: var(--accent);
+  outline: 2px dashed rgba(255, 255, 255, 0.7);
+  outline-offset: -3px;
+  box-shadow: 0 0.2rem 0.6rem rgba(0, 0, 0, 0.45);
+}
+
+/* While grabbed, the chevron doubles as a move hint. */
+.group-header.grabbed .group-chevron::after {
+  content: '↕';
+}
+
+.group-header.grabbed .group-chevron {
+  font-size: 0.8rem;
+}
+
 .group-chevron {
   flex: 0 0 auto;
   width: 0.9rem;

@@ -96,6 +96,9 @@ export function buildLegend(kind: ControllerKind, mode: 'menu' | 'channels'): Le
     { icon: g.b, label: 'Disconnect' },
     { icon: g.x, label: 'Mute' },
     { icon: g.y, label: 'Deafen' },
+    // Hold the same button as Join: on a server header it picks the server up to
+    // reorder it (Up/Down to move, press again to drop).
+    { icon: g.a, label: 'Hold: reorder server' },
     { icon: g.start, label: 'Favorite' },
     zoom,
     showHide

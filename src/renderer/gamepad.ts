@@ -4,6 +4,7 @@ import { stepRepeat, initialRepeatState, type RepeatState } from './auto-repeat'
 export type InputAction =
   | { type: 'nav'; action: NavAction }
   | { type: 'join' }
+  | { type: 'pickup' }
   | { type: 'disconnect' }
   | { type: 'toggleMute' }
   | { type: 'toggleDeafen' }
@@ -16,6 +17,9 @@ export type InputAction =
 export type InputHandler = (action: InputAction) => void
 
 const STICK_DEADZONE = 0.5
+// Hold A past this to "pick up" the selected server for reordering; a shorter
+// press is the normal tap (join / collapse).
+const LONG_PRESS_MS = 400
 
 // Standard gamepad mapping button indices.
 const BUTTON_DPAD_UP = 12
@@ -43,12 +47,38 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
   const wasPressed = new Map<string, boolean>()
   const stickDirection = new Map<number, 'up' | 'down' | null>()
   const stickRepeat = new Map<number, RepeatState>()
+  const holdState = new Map<string, { pressedAt: number; firedLong: boolean }>()
 
   function fireOnPress(gamepad: Gamepad, buttonIndex: number, action: InputAction): void {
     const key = `${gamepad.index}:${buttonIndex}`
     const isPressed = gamepad.buttons[buttonIndex]?.pressed ?? false
     if (isPressed && !wasPressed.get(key)) onAction(action)
     wasPressed.set(key, isPressed)
+  }
+
+  // Distinguishes a tap from a hold. The long action fires once the moment the
+  // hold threshold is crossed (so it feels responsive while still held); the tap
+  // action fires on release, but only if the long action didn't already fire.
+  function fireTapOrHold(
+    gamepad: Gamepad,
+    buttonIndex: number,
+    now: number,
+    tap: InputAction,
+    hold: InputAction
+  ): void {
+    const key = `${gamepad.index}:${buttonIndex}`
+    const isPressed = gamepad.buttons[buttonIndex]?.pressed ?? false
+    const prev = holdState.get(key)
+
+    if (isPressed && !prev) {
+      holdState.set(key, { pressedAt: now, firedLong: false })
+    } else if (isPressed && prev && !prev.firedLong && now - prev.pressedAt >= LONG_PRESS_MS) {
+      onAction(hold)
+      prev.firedLong = true
+    } else if (!isPressed && prev) {
+      if (!prev.firedLong) onAction(tap)
+      holdState.delete(key)
+    }
   }
 
   // Holding the stick auto-repeats with acceleration (fire, pause, then ramp
@@ -85,7 +115,8 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
       fireOnPress(gamepad, BUTTON_DPAD_DOWN, { type: 'nav', action: 'DOWN' })
       fireOnPress(gamepad, BUTTON_LEFT_BUMPER, { type: 'nav', action: 'GROUP_PREV' })
       fireOnPress(gamepad, BUTTON_RIGHT_BUMPER, { type: 'nav', action: 'GROUP_NEXT' })
-      fireOnPress(gamepad, BUTTON_A, { type: 'join' })
+      // A taps to join/collapse; held, it picks up the selected server to reorder.
+      fireTapOrHold(gamepad, BUTTON_A, now, { type: 'join' }, { type: 'pickup' })
       fireOnPress(gamepad, BUTTON_B, { type: 'disconnect' })
       fireOnPress(gamepad, BUTTON_X, { type: 'toggleMute' })
       fireOnPress(gamepad, BUTTON_Y, { type: 'toggleDeafen' })
@@ -128,6 +159,9 @@ const KEY_ACTIONS: Record<string, InputAction> = {
   ArrowRight: { type: 'nav', action: 'GROUP_NEXT' },
   Enter: { type: 'join' },
   a: { type: 'join' },
+  // Keyboard stand-in for "hold A" (long-press is awkward on a keyboard): grabs
+  // the selected server for reordering.
+  g: { type: 'pickup' },
   Escape: { type: 'disconnect' },
   b: { type: 'disconnect' },
   x: { type: 'toggleMute' },

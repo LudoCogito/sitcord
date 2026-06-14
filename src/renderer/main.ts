@@ -1,6 +1,7 @@
 import './styles.css'
 import { buildView, type Row } from './render'
 import { navigate } from './navigation'
+import { orderGroups, moveGuild } from './server-order'
 import { startGamepadLoop, startKeyboardFallback, type InputAction } from './gamepad'
 import { adjustScale } from './scale'
 import {
@@ -77,6 +78,44 @@ function toggleCollapse(guildId: string): void {
   localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsed]))
 }
 
+// Manual server order (guildIds), persisted renderer-side like collapse state.
+// Applied to whatever groups the main process pushes via orderedState().
+const SERVER_ORDER_STORAGE_KEY = 'serverOrder'
+
+function loadServerOrder(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SERVER_ORDER_STORAGE_KEY) ?? '[]')
+    return Array.isArray(parsed) ? (parsed as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+let serverOrder = loadServerOrder()
+
+// The guild currently "picked up" for reordering (Y on a server header), or null
+// when not in reorder mode. While set, Up/Down move this server instead of
+// moving the selection.
+let reorderingGuildId: string | null = null
+
+function saveServerOrder(): void {
+  localStorage.setItem(SERVER_ORDER_STORAGE_KEY, JSON.stringify(serverOrder))
+}
+
+// State with its groups put into the user's manual order. Everything that reads
+// groups (rendering, navigation, selection clamping) goes through this so the
+// saved order is the single source of on-screen order.
+function orderedState(): AppState {
+  return { ...state, groups: orderGroups(state.groups, serverOrder) }
+}
+
+// Row index of a given server's header in the current (ordered) view, or -1.
+function headerRowIndex(guildId: string): number {
+  return buildView(orderedState(), -1, collapsed).findIndex(
+    (row) => row.kind === 'header' && row.guildId === guildId
+  )
+}
+
 // Shown when there are no channels to list (Discord not connected). These are
 // controller-focusable: UP/DOWN move between them, A activates the highlighted
 // one.
@@ -99,7 +138,7 @@ function clampMenu(): void {
 
 function clampSelection(): void {
   // Selection indexes the visible rows (headers + non-collapsed channels).
-  const count = buildView(state, 0, collapsed).length
+  const count = buildView(orderedState(), 0, collapsed).length
   selectionIndex = count === 0 ? 0 : Math.min(Math.max(selectionIndex, 0), count - 1)
 }
 
@@ -405,10 +444,12 @@ function render(): void {
 
   const list = document.createElement('div')
   list.className = 'channel-list'
-  buildView(state, selectionIndex, collapsed).forEach((row, index) => {
+  buildView(orderedState(), selectionIndex, collapsed).forEach((row, index) => {
     const el = renderRow(row)
     if (row.kind === 'header') {
       const guildId = row.guildId
+      // The picked-up server gets a distinct "grabbed" look while reordering.
+      if (reorderingGuildId === guildId) el.classList.add('grabbed')
       // Clicking a server header selects it and toggles its collapse.
       el.addEventListener('click', () => {
         selectionIndex = index
@@ -464,10 +505,46 @@ function moveSelection(): void {
 }
 
 function selectedRow(): Row | null {
-  return buildView(state, selectionIndex, collapsed)[selectionIndex] ?? null
+  return buildView(orderedState(), selectionIndex, collapsed)[selectionIndex] ?? null
 }
 
 function handleAction(action: InputAction): void {
+  // Reorder mode is modal: with a server "picked up", Up/Down move it, A/B/Y
+  // drop it, zoom/window still work, and everything else is suppressed so the
+  // grabbed server can't be lost mid-move. Checked first so even Select (help)
+  // is ignored while holding a server.
+  if (reorderingGuildId) {
+    switch (action.type) {
+      case 'nav':
+        if (action.action === 'UP' || action.action === 'DOWN') {
+          const displayed = orderGroups(state.groups, serverOrder).map((g) => g.guildId)
+          serverOrder = moveGuild(displayed, reorderingGuildId, action.action)
+          saveServerOrder()
+          selectionIndex = headerRowIndex(reorderingGuildId) // selection follows it
+          render()
+        }
+        return
+      case 'pickup':
+      case 'join':
+      case 'disconnect':
+        reorderingGuildId = null // drop it
+        render()
+        return
+      case 'zoom':
+        scale = adjustScale(scale, action.direction)
+        applyScale()
+        return
+      case 'toggleVisibility':
+        void window.api.toggleVisibility()
+        return
+      case 'minimize':
+        void window.api.minimize()
+        return
+      default:
+        return
+    }
+  }
+
   // Settings/help drawer takes priority: Select toggles it from anywhere, and
   // while it's open the only other input that does anything is B/Esc (close),
   // so it acts as a modal layer over the channel list.
@@ -510,7 +587,7 @@ function handleAction(action: InputAction): void {
 
   switch (action.type) {
     case 'nav': {
-      const rows = buildView(state, selectionIndex, collapsed)
+      const rows = buildView(orderedState(), selectionIndex, collapsed)
       selectionIndex = navigate({ rows, selectionIndex }, action.action).selectionIndex
       moveSelection() // just relocate the highlight; no full rebuild
       break
@@ -535,6 +612,18 @@ function handleAction(action: InputAction): void {
     case 'toggleDeafen':
       void window.api.setDeafen(!state.deafened)
       break
+    case 'pickup': {
+      // Long-press A on a server header picks it up for reordering; on a channel
+      // a long press just falls back to joining it.
+      const row = selectedRow()
+      if (row?.kind === 'header') {
+        reorderingGuildId = row.guildId
+        render()
+      } else if (row?.kind === 'channel') {
+        void window.api.join(row.channelId)
+      }
+      break
+    }
     case 'toggleFavorite': {
       const row = selectedRow()
       if (row?.kind === 'channel') void window.api.toggleFavorite(row.channelId)
@@ -555,6 +644,11 @@ function handleAction(action: InputAction): void {
 
 window.api.onStateUpdate((next) => {
   state = next
+  // Drop a held server if it vanished (e.g. the connection dropped) so the
+  // reorder modal can't get stuck swallowing input.
+  if (reorderingGuildId && !state.groups.some((g) => g.guildId === reorderingGuildId)) {
+    reorderingGuildId = null
+  }
   render()
 })
 

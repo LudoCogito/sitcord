@@ -58,7 +58,10 @@ describe('buildLegend', () => {
     expect(labels).toContain('Disconnect')
     expect(labels).toContain('Mute')
     expect(labels).toContain('Deafen')
+    expect(labels).toContain('Hold: reorder server')
     expect(entries.find((e) => e.label === 'Join')?.icon).toBe('A')
+    // Reorder is a long-press of the Join button (A), used on a server header.
+    expect(entries.find((e) => e.label === 'Hold: reorder server')?.icon).toBe('A')
   })
 
   it('maps Join to the cross glyph on playstation', () => {
