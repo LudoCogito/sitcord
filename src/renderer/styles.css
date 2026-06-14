@@ -229,6 +229,9 @@ body {
 }
 
 .row-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
   font: inherit;
   font-size: 0.5rem;
   font-weight: 700;
@@ -240,6 +243,23 @@ body {
   border-radius: 0.3rem;
   padding: 0.25rem 0.5rem;
   cursor: pointer;
+}
+
+/* The controller-glyph badge on each row button — a boxed letter/shape that
+   borrows the button's text colour so it stays legible on the red leave button
+   too. */
+.row-btn-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0.95rem;
+  height: 0.95rem;
+  padding: 0 0.18rem;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  font-size: 0.48rem;
+  line-height: 1;
+  opacity: 0.85;
 }
 
 .row-btn:hover {
@@ -377,7 +397,9 @@ body {
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* Settings/help drawer: dim backdrop with a panel slid up from the bottom. */
+/* Settings/help drawer: dim backdrop with a panel slid up from the bottom. It
+   lives in the DOM full-time so opening is just the `.open` class flip below —
+   no DOM construction on press. Hidden + click-through until then. */
 .help-backdrop {
   position: absolute;
   inset: 0;
@@ -385,6 +407,14 @@ body {
   flex-direction: column;
   justify-content: flex-end;
   background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.help-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .help-panel {
@@ -396,6 +426,13 @@ body {
   max-height: 85%;
   overflow-y: auto;
   padding: 0.7rem 0.9rem 0.9rem;
+  /* Slides up from below; .open brings it to rest. */
+  transform: translateY(100%);
+  transition: transform 0.16s ease-out;
+}
+
+.help-backdrop.open .help-panel {
+  transform: translateY(0);
 }
 
 .help-title {

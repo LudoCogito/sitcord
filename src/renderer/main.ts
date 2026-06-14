@@ -3,7 +3,13 @@ import { buildView, type Row } from './render'
 import { navigate } from './navigation'
 import { startGamepadLoop, startKeyboardFallback, type InputAction } from './gamepad'
 import { adjustScale } from './scale'
-import { buildLegend, settingsChip, detectController, type ControllerKind } from './controller-profile'
+import {
+  buildLegend,
+  settingsChip,
+  detectController,
+  glyphsFor,
+  type ControllerKind
+} from './controller-profile'
 import type { AppState } from '../shared/ipc'
 
 // Root font size at scale 1.0; the rem-based stylesheet scales off this so the
@@ -115,6 +121,34 @@ function guildAcronymTile(name: string): HTMLElement {
   return tile
 }
 
+// An inline control on the active channel row, badged with the controller's
+// glyph for its action (e.g. [X] Mute) so the main button paths are visible at
+// a glance without opening the settings drawer. Stops propagation so the badge
+// click doesn't also trigger the row's click-to-join.
+function rowButton(
+  glyph: string,
+  label: string,
+  extraClass: string,
+  onClick: () => void
+): HTMLButtonElement {
+  const btn = document.createElement('button')
+  btn.className = extraClass ? `row-btn ${extraClass}` : 'row-btn'
+
+  const badge = document.createElement('span')
+  badge.className = 'row-btn-glyph'
+  badge.textContent = glyph
+
+  const text = document.createElement('span')
+  text.textContent = label
+
+  btn.append(badge, text)
+  btn.addEventListener('click', (event) => {
+    event.stopPropagation()
+    onClick()
+  })
+  return btn
+}
+
 function renderRow(row: Row): HTMLElement {
   if (row.kind === 'header') {
     const el = document.createElement('div')
@@ -176,29 +210,17 @@ function renderRow(row: Row): HTMLElement {
     const controls = document.createElement('div')
     controls.className = 'row-controls'
 
-    const muteBtn = document.createElement('button')
-    muteBtn.className = 'row-btn'
-    muteBtn.textContent = state.muted ? 'Unmute' : 'Mute'
-    muteBtn.addEventListener('click', (event) => {
-      event.stopPropagation()
+    // Badge each button with the connected controller's glyph for that action
+    // (X mute / Y deafen / B disconnect on Xbox; □ ○ etc. on PlayStation).
+    const g = glyphsFor(detectConnectedController())
+
+    const muteBtn = rowButton(g.x, state.muted ? 'Unmute' : 'Mute', '', () =>
       void window.api.setMute(!state.muted)
-    })
-
-    const deafenBtn = document.createElement('button')
-    deafenBtn.className = 'row-btn'
-    deafenBtn.textContent = state.deafened ? 'Undeafen' : 'Deafen'
-    deafenBtn.addEventListener('click', (event) => {
-      event.stopPropagation()
+    )
+    const deafenBtn = rowButton(g.y, state.deafened ? 'Undeafen' : 'Deafen', '', () =>
       void window.api.setDeafen(!state.deafened)
-    })
-
-    const leaveBtn = document.createElement('button')
-    leaveBtn.className = 'row-btn row-btn--leave'
-    leaveBtn.textContent = 'Leave'
-    leaveBtn.addEventListener('click', (event) => {
-      event.stopPropagation()
-      void window.api.disconnect()
-    })
+    )
+    const leaveBtn = rowButton(g.b, 'Leave', 'row-btn--leave', () => void window.api.disconnect())
 
     controls.append(muteBtn, deafenBtn, leaveBtn)
     el.appendChild(controls)
@@ -247,13 +269,30 @@ function renderLegend(): HTMLElement {
   const kind = detectConnectedController()
   const chip = makeChip(settingsChip(kind, helpOpen), 'legend-label')
   chip.className = 'legend-chip legend-chip--button'
-  chip.addEventListener('click', () => {
-    helpOpen = !helpOpen
-    render()
-  })
+  chip.addEventListener('click', () => setHelpOpen(!helpOpen))
 
   legend.appendChild(chip)
   return legend
+}
+
+// Open/close the drawer. The drawer is always present in the DOM (built by the
+// last full render, hidden via CSS); toggling it is a pure `.open` class flip —
+// no DOM construction, no list rebuild — so pressing Select responds instantly
+// and the panel slides up via the CSS transition rather than popping in late.
+// Falls back to a full render if the drawer isn't in the DOM yet.
+function setHelpOpen(open: boolean): void {
+  if (open === helpOpen) return
+  helpOpen = open
+
+  const backdrop = document.querySelector<HTMLElement>('.help-backdrop')
+  if (!backdrop) {
+    render()
+    return
+  }
+
+  backdrop.classList.toggle('open', helpOpen)
+  // Refresh just the bottom chip (Settings <-> Close).
+  document.querySelector('.legend')?.replaceWith(renderLegend())
 }
 
 // The settings/help drawer: a bottom-anchored panel (over a dim backdrop)
@@ -262,10 +301,10 @@ function renderLegend(): HTMLElement {
 function renderHelpDrawer(mode: 'menu' | 'channels'): HTMLElement {
   const backdrop = document.createElement('div')
   backdrop.className = 'help-backdrop'
-  backdrop.addEventListener('click', () => {
-    helpOpen = false
-    render()
-  })
+  // Lives in the DOM full-time but stays hidden (and click-through) until open;
+  // setHelpOpen flips this class, and CSS animates the slide/fade.
+  if (helpOpen) backdrop.classList.add('open')
+  backdrop.addEventListener('click', () => setHelpOpen(false))
 
   const panel = document.createElement('div')
   panel.className = 'help-panel'
@@ -354,7 +393,7 @@ function render(): void {
     const content = document.createElement('div')
     content.className = 'content'
     content.appendChild(renderMenu())
-    if (helpOpen) content.appendChild(renderHelpDrawer('menu'))
+    content.appendChild(renderHelpDrawer('menu'))
     app.appendChild(content)
     app.appendChild(renderLegend())
     domSelectionIndex = -1 // no channel list in the DOM
@@ -389,7 +428,7 @@ function render(): void {
     list.appendChild(el)
   })
   content.appendChild(list)
-  if (helpOpen) content.appendChild(renderHelpDrawer('channels'))
+  content.appendChild(renderHelpDrawer('channels'))
   app.appendChild(content)
   app.appendChild(renderLegend())
 
@@ -433,15 +472,11 @@ function handleAction(action: InputAction): void {
   // while it's open the only other input that does anything is B/Esc (close),
   // so it acts as a modal layer over the channel list.
   if (action.type === 'toggleHelp') {
-    helpOpen = !helpOpen
-    render()
+    setHelpOpen(!helpOpen)
     return
   }
   if (helpOpen) {
-    if (action.type === 'disconnect') {
-      helpOpen = false
-      render()
-    }
+    if (action.type === 'disconnect') setHelpOpen(false)
     return
   }
 
