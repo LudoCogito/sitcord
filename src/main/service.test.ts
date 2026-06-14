@@ -99,6 +99,10 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+// Drain microtasks so the lazy guild-icon fetch (fire-and-forget after connect)
+// settles. Uses a real macrotask, so call it before switching to fake timers.
+const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
 describe('DiscordService', () => {
   it('start() connects, authenticates, loads channels, and pushes ranked state', async () => {
     const states: AppState[] = []
@@ -107,15 +111,17 @@ describe('DiscordService', () => {
 
     await service.start()
 
+    // GET_GUILD (icons) is fired lazily after the connected state, so it lands
+    // last — not in the channel-loading critical path.
     expect(rpc.calls.map((c) => c.cmd)).toEqual([
       'AUTHENTICATE',
       'GET_GUILDS',
       'GET_CHANNELS',
-      'GET_GUILD',
       'GET_SELECTED_VOICE_CHANNEL',
       'GET_VOICE_SETTINGS',
       'GET_CHANNEL',
-      'GET_CHANNEL'
+      'GET_CHANNEL',
+      'GET_GUILD'
     ])
     expect(rpc.subscriptions.map((s) => s.evt)).toEqual([
       'VOICE_CHANNEL_SELECT',
@@ -128,13 +134,18 @@ describe('DiscordService', () => {
       'VOICE_STATE_DELETE'
     ])
 
-    expect(states).toHaveLength(1)
-    const [state] = states
-    expect(state.status).toBe('connected')
-    expect(state.currentChannelId).toBeNull()
-    expect(state.occupancy).toEqual({ c1: 1, c2: 0 })
+    // First paint: channels are listed immediately, before icons resolve.
+    const first = states[0]
+    expect(first.status).toBe('connected')
+    expect(first.currentChannelId).toBeNull()
+    expect(first.occupancy).toEqual({ c1: 1, c2: 0 })
+    expect(first.groups[0].iconUrl).toBeUndefined()
+    expect(first.groups[0].channels.map((c) => c.id)).toEqual(['c2', 'c1'])
+
+    // Icons stream in lazily and get applied in a follow-up push.
+    await flush()
     const icon = 'https://cdn.discordapp.com/icons/g1/abc.png'
-    expect(state.groups).toEqual([
+    expect(states.at(-1)?.groups).toEqual([
       {
         guildId: 'g1',
         guildName: 'Guild One',
@@ -244,11 +255,14 @@ describe('DiscordService', () => {
     const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
     const { service, rpc } = makeService(states, store)
     await service.start()
+    await flush() // let the lazy icon push settle first
 
     vi.useFakeTimers()
+    const before = states.length
     rpc.emit('event', { cmd: 'DISPATCH', evt: 'VOICE_CHANNEL_SELECT', data: { channel_id: 'c1' }, nonce: null })
 
-    expect(states).toHaveLength(1)
+    // The event itself doesn't push synchronously — occupancy is debounced.
+    expect(states.length).toBe(before)
 
     await vi.advanceTimersByTimeAsync(250)
 

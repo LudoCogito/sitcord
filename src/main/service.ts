@@ -36,6 +36,12 @@ export class DiscordService {
   private readonly now: () => number
 
   private channels: VoiceChannel[] = []
+  private guilds: { id: string; name: string }[] = []
+  // guildId -> icon url (string) or null (fetched, no custom icon). Cached for
+  // the app session so reconnects don't re-fetch or flash; a fresh launch
+  // starts empty (the RPC gives no cache validator, and a server can change its
+  // icon, so persisting urls would risk showing a stale one).
+  private readonly guildIconCache = new Map<string, string | null>()
   private currentChannelId: string | null = null
   private occupancy: Record<string, number> = {}
   private status: ConnectionStatus = 'connecting'
@@ -97,6 +103,8 @@ export class DiscordService {
     await this.refreshOccupancy()
     this.status = 'connected'
     this.pushState()
+    // Icons stream in after first paint; never blocks the connected state.
+    void this.loadGuildIcons().catch(() => {})
   }
 
   private onDisconnect(): void {
@@ -146,19 +154,16 @@ export class DiscordService {
   private async loadChannels(): Promise<void> {
     const guildsRes = await this.rpc.request('GET_GUILDS', {})
     const guilds: any[] = guildsRes.data?.guilds ?? []
+    this.guilds = guilds.map((guild) => ({ id: guild.id, name: guild.name }))
     // Fan out per-guild channel fetches concurrently; isolate failures so one
-    // guild we can't read doesn't wipe out the whole channel list.
+    // guild we can't read doesn't wipe out the whole channel list. Icons are
+    // not fetched here — they come in lazily via loadGuildIcons() so a big
+    // server count doesn't delay first paint. Any already-cached icon is
+    // applied immediately (e.g. across a reconnect) to avoid a re-flash.
     const perGuild = await Promise.all(
       guilds.map(async (guild) => {
         try {
-          // GET_GUILDS only gives id+name, so fetch the guild for its icon_url
-          // (a ready CDN url, or empty when the server has no icon). Tolerate
-          // its failure — a missing icon shouldn't drop the channel list.
-          const [channelsRes, guildRes] = await Promise.all([
-            this.rpc.request('GET_CHANNELS', { guild_id: guild.id }),
-            this.rpc.request('GET_GUILD', { guild_id: guild.id }).catch(() => null)
-          ])
-          const guildIconUrl: string | undefined = guildRes?.data?.icon_url || undefined
+          const channelsRes = await this.rpc.request('GET_CHANNELS', { guild_id: guild.id })
           const channels: any[] = channelsRes.data?.channels ?? []
           return channels
             .filter((channel) => VOICE_CHANNEL_TYPES.has(channel.type))
@@ -166,7 +171,7 @@ export class DiscordService {
               id: channel.id,
               guildId: guild.id,
               guildName: guild.name,
-              guildIconUrl,
+              guildIconUrl: this.guildIconCache.get(guild.id) ?? undefined,
               name: channel.name
             }))
         } catch {
@@ -175,6 +180,36 @@ export class DiscordService {
       })
     )
     this.channels = perGuild.flat()
+  }
+
+  // Lazily fetch each not-yet-cached guild's icon_url (GET_GUILD), then apply
+  // and push once. Fire-and-forget after the connected state is up. GET_GUILDS
+  // only returns id+name, so the icon needs this per-guild call; failures are
+  // left uncached so a later reconnect can retry.
+  private async loadGuildIcons(): Promise<void> {
+    const pending = this.guilds.filter((guild) => !this.guildIconCache.has(guild.id))
+    if (pending.length === 0) return
+
+    await Promise.all(
+      pending.map(async (guild) => {
+        try {
+          const res = await this.rpc.request('GET_GUILD', { guild_id: guild.id })
+          this.guildIconCache.set(guild.id, res?.data?.icon_url || null)
+        } catch {
+          // Leave uncached; a future reconnect retries.
+        }
+      })
+    )
+
+    this.applyGuildIcons()
+    this.pushState()
+  }
+
+  private applyGuildIcons(): void {
+    this.channels = this.channels.map((channel) => ({
+      ...channel,
+      guildIconUrl: this.guildIconCache.get(channel.guildId) ?? undefined
+    }))
   }
 
   private async subscribeToVoiceEvents(): Promise<void> {
