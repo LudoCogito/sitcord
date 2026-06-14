@@ -29,3 +29,24 @@ export function moveGuild(order: string[], guildId: string, direction: 'UP' | 'D
   ;[next[i], next[j]] = [next[j], next[i]]
   return next
 }
+
+/**
+ * Move `guildId` so it lands immediately before/after `targetGuildId` — the
+ * primitive behind mouse drag-and-drop, where a server can be dropped anywhere
+ * rather than nudged one slot. A no-op when either id is missing or they're the
+ * same. The guild is removed first, so the target's index is taken *after*
+ * removal (no off-by-one when dragging downward).
+ */
+export function moveGuildRelativeTo(
+  order: string[],
+  guildId: string,
+  targetGuildId: string,
+  position: 'before' | 'after'
+): string[] {
+  if (guildId === targetGuildId || !order.includes(guildId)) return order
+  const without = order.filter((id) => id !== guildId)
+  const ti = without.indexOf(targetGuildId)
+  if (ti === -1) return order
+  without.splice(position === 'before' ? ti : ti + 1, 0, guildId)
+  return without
+}

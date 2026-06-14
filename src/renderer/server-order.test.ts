@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { orderGroups, moveGuild } from './server-order'
+import { orderGroups, moveGuild, moveGuildRelativeTo } from './server-order'
 
 const g = (guildId: string) => ({ guildId })
 
@@ -46,5 +46,39 @@ describe('moveGuild', () => {
 
   it('is a no-op for an unknown guild', () => {
     expect(moveGuild(['a', 'b'], 'z', 'UP')).toEqual(['a', 'b'])
+  })
+})
+
+describe('moveGuildRelativeTo', () => {
+  it('drops a guild before a target', () => {
+    expect(moveGuildRelativeTo(['a', 'b', 'c', 'd'], 'd', 'b', 'before')).toEqual([
+      'a',
+      'd',
+      'b',
+      'c'
+    ])
+  })
+
+  it('drops a guild after a target', () => {
+    expect(moveGuildRelativeTo(['a', 'b', 'c', 'd'], 'a', 'c', 'after')).toEqual([
+      'b',
+      'c',
+      'a',
+      'd'
+    ])
+  })
+
+  it('handles dragging downward without an off-by-one', () => {
+    // Move the first item to just after the second: a should land between b and c.
+    expect(moveGuildRelativeTo(['a', 'b', 'c'], 'a', 'b', 'after')).toEqual(['b', 'a', 'c'])
+  })
+
+  it('is a no-op when dropping a guild onto itself', () => {
+    expect(moveGuildRelativeTo(['a', 'b', 'c'], 'b', 'b', 'before')).toEqual(['a', 'b', 'c'])
+  })
+
+  it('is a no-op when either id is missing', () => {
+    expect(moveGuildRelativeTo(['a', 'b'], 'z', 'a', 'before')).toEqual(['a', 'b'])
+    expect(moveGuildRelativeTo(['a', 'b'], 'a', 'z', 'before')).toEqual(['a', 'b'])
   })
 })

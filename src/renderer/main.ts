@@ -1,7 +1,7 @@
 import './styles.css'
 import { buildView, type Row } from './render'
 import { navigate } from './navigation'
-import { orderGroups, moveGuild } from './server-order'
+import { orderGroups, moveGuild, moveGuildRelativeTo } from './server-order'
 import { startGamepadLoop, startKeyboardFallback, type InputAction } from './gamepad'
 import { adjustScale } from './scale'
 import {
@@ -116,6 +116,75 @@ function headerRowIndex(guildId: string): number {
   )
 }
 
+// Mouse drag-and-drop reorder state. The guild being dragged, and the header
+// currently hovered as a drop target (with which edge the drop indicator is on).
+// Native HTML5 drag is inherently distinct from a click, so this coexists with
+// click-to-collapse without a separate long-press gate.
+let dragGuildId: string | null = null
+let dropTargetEl: HTMLElement | null = null
+
+function clearDropIndicator(): void {
+  dropTargetEl?.classList.remove('drop-before', 'drop-after')
+  dropTargetEl = null
+}
+
+// Wire a server header for drag (as a source) and drop (as a target). The live
+// list isn't rebuilt mid-drag — that would destroy the drag source — so reorder
+// happens once on drop; an inset line shows where it will land.
+function wireHeaderDrag(el: HTMLElement, guildId: string): void {
+  el.draggable = true
+
+  el.addEventListener('dragstart', (event) => {
+    dragGuildId = guildId
+    el.classList.add('grabbed')
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData('text/plain', guildId) // some browsers need data set
+    }
+  })
+
+  el.addEventListener('dragend', () => {
+    dragGuildId = null
+    el.classList.remove('grabbed')
+    clearDropIndicator()
+  })
+
+  el.addEventListener('dragover', (event) => {
+    if (!dragGuildId || dragGuildId === guildId) return
+    event.preventDefault() // mark this header as a valid drop target
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+
+    // Drop before or after, depending on which half of the header we're over.
+    const rect = el.getBoundingClientRect()
+    const before = event.clientY < rect.top + rect.height / 2
+    if (dropTargetEl !== el) clearDropIndicator()
+    dropTargetEl = el
+    el.classList.toggle('drop-before', before)
+    el.classList.toggle('drop-after', !before)
+  })
+
+  el.addEventListener('dragleave', () => {
+    if (dropTargetEl === el) clearDropIndicator()
+  })
+
+  el.addEventListener('drop', (event) => {
+    event.preventDefault()
+    const moved = dragGuildId
+    // Reset drag state up front: render() below detaches this element, so its
+    // dragend may not fire to do the cleanup.
+    dragGuildId = null
+    clearDropIndicator()
+    if (!moved || moved === guildId) return
+    const rect = el.getBoundingClientRect()
+    const position = event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+    const displayed = orderGroups(state.groups, serverOrder).map((g) => g.guildId)
+    serverOrder = moveGuildRelativeTo(displayed, moved, guildId, position)
+    saveServerOrder()
+    selectionIndex = headerRowIndex(moved) // keep the moved server selected
+    render() // rebuilds in the new order and clears all drag classes
+  })
+}
+
 // Shown when there are no channels to list (Discord not connected). These are
 // controller-focusable: UP/DOWN move between them, A activates the highlighted
 // one.
@@ -202,6 +271,8 @@ function renderRow(row: Row): HTMLElement {
       icon.className = 'group-icon'
       icon.src = row.iconUrl
       icon.alt = ''
+      // Don't let the image start its own native drag — the header owns the drag.
+      icon.draggable = false
       // If the image fails to load, swap in the acronym fallback.
       icon.addEventListener('error', () => icon.replaceWith(guildAcronymTile(row.guildName)))
       el.appendChild(icon)
@@ -450,6 +521,8 @@ function render(): void {
       const guildId = row.guildId
       // The picked-up server gets a distinct "grabbed" look while reordering.
       if (reorderingGuildId === guildId) el.classList.add('grabbed')
+      // Mouse drag-and-drop reordering (the pointer equivalent of long-press A).
+      wireHeaderDrag(el, guildId)
       // Clicking a server header selects it and toggles its collapse.
       el.addEventListener('click', () => {
         selectionIndex = index

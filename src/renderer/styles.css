@@ -166,6 +166,24 @@ body {
   font-size: 0.8rem;
 }
 
+/* Mouse drag-and-drop: a "grab" cursor on headers, and an inset line showing
+   which edge the dragged server will drop against. */
+.group-header {
+  cursor: grab;
+}
+
+.group-header:active {
+  cursor: grabbing;
+}
+
+.group-header.drop-before {
+  box-shadow: inset 0 3px 0 var(--favorite);
+}
+
+.group-header.drop-after {
+  box-shadow: inset 0 -3px 0 var(--favorite);
+}
+
 .group-chevron {
   flex: 0 0 auto;
   width: 0.9rem;
