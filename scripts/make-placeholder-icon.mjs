@@ -1,9 +1,9 @@
 // Generates a placeholder build/icon.png (no image deps) so the dock, window,
 // and tray show *something* branded until real artwork replaces it. Run with:
 //   node scripts/make-placeholder-icon.mjs
-// A blurple rounded square with a white side-profile chair silhouette (a nod to
-// "Sit"-cord). Replace build/icon.png with your own 1024x1024 art whenever you
-// have it.
+// A blurple rounded square with a white front-view loveseat silhouette (a nod
+// to "Sit"-cord). Replace build/icon.png with your own 1024x1024 art whenever
+// you have it.
 import { deflateSync } from 'node:zlib'
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -14,17 +14,23 @@ const BG = [0x58, 0x65, 0xf2] // blurple
 const FG = [0xff, 0xff, 0xff] // white
 const corner = SIZE * 0.18 // rounded-corner radius of the badge
 
-// White side-profile chair silhouette ("Sit"-cord), drawn as the union of
-// rounded bars: a thick back post (backrest + rear leg in one stroke), a seat
-// rail, a front leg, and a plump cushion resting on the seat. Each part is
+// White front-view loveseat silhouette ("Sit"-cord), drawn as the union of
+// rounded parts: a wide backrest spanning the two tall arms, a single wide seat
+// cushion in front of it, a seat rail joining the arms, and two outer legs. Thin
+// blurple seams (between the cushion and each arm, and between the cushion and
+// the backrest above) keep the cushion distinct from the frame. Each part is
 // [x0,y0,x1,y1,rr] in fractions of SIZE (rr is its corner radius in px).
-const STROKE_ROUND = SIZE * 0.03 // rounding of the thick frame bars
-const CUSHION_ROUND = SIZE * 0.06 // big rounding so the pad reads as a cushion
-const chairParts = [
-  [0.27, 0.17, 0.4, 0.81, STROKE_ROUND], // back post: thick backrest + rear leg
-  [0.34, 0.595, 0.72, 0.645, STROKE_ROUND], // seat rail (thin) under the cushion
-  [0.61, 0.645, 0.72, 0.81, STROKE_ROUND], // front leg: thick vertical, right
-  [0.34, 0.44, 0.72, 0.575, CUSHION_ROUND] // plush cushion, a seam above the rail
+const FRAME_ROUND = SIZE * 0.05 // soft rounding for the arms, backrest and rail
+const CUSHION_ROUND = SIZE * 0.025 // modest rounding for the single seat cushion
+const LEG_ROUND = SIZE * 0.015 // small rounding for the stubby legs
+const seatParts = [
+  [0.275, 0.22, 0.725, 0.44, FRAME_ROUND], // backrest: tall, rises above the arms
+  [0.29, 0.46, 0.71, 0.6, CUSHION_ROUND], // single wide seat cushion
+  [0.15, 0.4, 0.275, 0.66, FRAME_ROUND], // left arm (shorter than the backrest)
+  [0.725, 0.4, 0.85, 0.66, FRAME_ROUND], // right arm (shorter than the backrest)
+  [0.15, 0.6, 0.85, 0.68, FRAME_ROUND], // seat rail joining the arms
+  [0.19, 0.68, 0.29, 0.76, LEG_ROUND], // outer-left leg
+  [0.71, 0.68, 0.81, 0.76, LEG_ROUND] // outer-right leg
 ].map(([x0, y0, x1, y1, rr]) => [x0 * SIZE, y0 * SIZE, x1 * SIZE, y1 * SIZE, rr])
 
 function inRoundedRect(x, y) {
@@ -44,8 +50,8 @@ function inRoundRect(px, py, x0, y0, x1, y1, rr) {
   return Math.sqrt(ax * ax + ay * ay) + Math.min(Math.max(qx, qy), 0) - rr <= 0
 }
 
-function inChair(px, py) {
-  for (const [x0, y0, x1, y1, rr] of chairParts) {
+function inSeat(px, py) {
+  for (const [x0, y0, x1, y1, rr] of seatParts) {
     if (inRoundRect(px, py, x0, y0, x1, y1, rr)) return true
   }
   return false
@@ -61,11 +67,11 @@ for (let y = 0; y < SIZE; y++) {
     const px = x + 0.5
     const py = y + 0.5
     const insideSquare = inRoundedRect(px, py)
-    const insideChair = inChair(px, py)
+    const insideSeat = inSeat(px, py)
     let r, g, b, a
     if (!insideSquare) {
       r = g = b = a = 0 // transparent outside the rounded square
-    } else if (insideChair) {
+    } else if (insideSeat) {
       ;[r, g, b] = FG
       a = 255
     } else {
