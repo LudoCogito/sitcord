@@ -86,6 +86,24 @@ function clampSelection(): void {
   selectionIndex = count === 0 ? 0 : Math.min(Math.max(selectionIndex, 0), count - 1)
 }
 
+// Discord-style acronym for iconless servers: the initial of each word.
+function guildAcronym(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((word) => word[0] ?? '')
+    .join('')
+    .slice(0, 3)
+    .toUpperCase()
+}
+
+function guildAcronymTile(name: string): HTMLElement {
+  const tile = document.createElement('span')
+  tile.className = 'group-icon group-icon--fallback'
+  tile.textContent = guildAcronym(name)
+  return tile
+}
+
 function renderRow(row: Row): HTMLElement {
   if (row.kind === 'header') {
     const el = document.createElement('div')
@@ -97,6 +115,20 @@ function renderRow(row: Row): HTMLElement {
     chevron.className = 'group-chevron'
     chevron.textContent = row.isCollapsed ? '▸' : '▾'
     el.appendChild(chevron)
+
+    // Server icon sits just left of the name. Discord gives a CDN url, or none
+    // for iconless servers — those fall back to an acronym tile like Discord's.
+    if (row.iconUrl) {
+      const icon = document.createElement('img')
+      icon.className = 'group-icon'
+      icon.src = row.iconUrl
+      icon.alt = ''
+      // If the image fails to load, swap in the acronym fallback.
+      icon.addEventListener('error', () => icon.replaceWith(guildAcronymTile(row.guildName)))
+      el.appendChild(icon)
+    } else {
+      el.appendChild(guildAcronymTile(row.guildName))
+    }
 
     const name = document.createElement('span')
     name.className = 'group-name'

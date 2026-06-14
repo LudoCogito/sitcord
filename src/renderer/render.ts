@@ -4,6 +4,7 @@ export interface HeaderRow {
   kind: 'header'
   guildId: string
   guildName: string
+  iconUrl?: string
   channelCount: number
   isCollapsed: boolean
   isSelected: boolean
@@ -43,6 +44,7 @@ export function buildView(
       kind: 'header',
       guildId: group.guildId,
       guildName: group.guildName,
+      iconUrl: group.iconUrl,
       channelCount: group.channels.length,
       isCollapsed,
       isSelected: rowIndex === selectionIndex

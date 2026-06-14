@@ -151,7 +151,14 @@ export class DiscordService {
     const perGuild = await Promise.all(
       guilds.map(async (guild) => {
         try {
-          const channelsRes = await this.rpc.request('GET_CHANNELS', { guild_id: guild.id })
+          // GET_GUILDS only gives id+name, so fetch the guild for its icon_url
+          // (a ready CDN url, or empty when the server has no icon). Tolerate
+          // its failure — a missing icon shouldn't drop the channel list.
+          const [channelsRes, guildRes] = await Promise.all([
+            this.rpc.request('GET_CHANNELS', { guild_id: guild.id }),
+            this.rpc.request('GET_GUILD', { guild_id: guild.id }).catch(() => null)
+          ])
+          const guildIconUrl: string | undefined = guildRes?.data?.icon_url || undefined
           const channels: any[] = channelsRes.data?.channels ?? []
           return channels
             .filter((channel) => VOICE_CHANNEL_TYPES.has(channel.type))
@@ -159,6 +166,7 @@ export class DiscordService {
               id: channel.id,
               guildId: guild.id,
               guildName: guild.name,
+              guildIconUrl,
               name: channel.name
             }))
         } catch {

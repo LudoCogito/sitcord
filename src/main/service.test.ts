@@ -64,6 +64,7 @@ class MemoryStore implements ServiceStore {
 const responses = {
   AUTHENTICATE: { data: { user: { username: 'me' } } },
   GET_GUILDS: { data: { guilds: [{ id: 'g1', name: 'Guild One' }] } },
+  GET_GUILD: { data: { id: 'g1', name: 'Guild One', icon_url: 'https://cdn.discordapp.com/icons/g1/abc.png' } },
   GET_CHANNELS: {
     data: {
       channels: [
@@ -110,6 +111,7 @@ describe('DiscordService', () => {
       'AUTHENTICATE',
       'GET_GUILDS',
       'GET_CHANNELS',
+      'GET_GUILD',
       'GET_SELECTED_VOICE_CHANNEL',
       'GET_VOICE_SETTINGS',
       'GET_CHANNEL',
@@ -131,13 +133,15 @@ describe('DiscordService', () => {
     expect(state.status).toBe('connected')
     expect(state.currentChannelId).toBeNull()
     expect(state.occupancy).toEqual({ c1: 1, c2: 0 })
+    const icon = 'https://cdn.discordapp.com/icons/g1/abc.png'
     expect(state.groups).toEqual([
       {
         guildId: 'g1',
         guildName: 'Guild One',
+        iconUrl: icon,
         channels: [
-          { id: 'c2', guildId: 'g1', guildName: 'Guild One', name: 'AFK' },
-          { id: 'c1', guildId: 'g1', guildName: 'Guild One', name: 'General' }
+          { id: 'c2', guildId: 'g1', guildName: 'Guild One', guildIconUrl: icon, name: 'AFK' },
+          { id: 'c1', guildId: 'g1', guildName: 'Guild One', guildIconUrl: icon, name: 'General' }
         ]
       }
     ])

@@ -20,6 +20,13 @@ describe('rankChannels', () => {
     expect(groups[0].guildName).toBe('Server One')
     expect(groups[0].channels.map(c => c.id)).toEqual(['c', 'b', 'a']) // fav, then count 10, then 5
   })
+  it("carries the guild's icon url onto its group", () => {
+    const channels: VoiceChannel[] = [
+      { id: 'a', guildId: 'g1', guildName: 'S', guildIconUrl: 'https://cdn.discordapp.com/icons/g1/h.png', name: 'A' }
+    ]
+    const groups = rankChannels(channels, { favorites: [], usage: {} })
+    expect(groups[0].iconUrl).toBe('https://cdn.discordapp.com/icons/g1/h.png')
+  })
   it('breaks usage ties by recency (lastJoined desc)', () => {
     const channels = [ch('a','g1','S','A'), ch('b','g1','S','B')]
     const store: Store = { favorites: [], usage: { a:{count:3,lastJoined:1}, b:{count:3,lastJoined:9} } }

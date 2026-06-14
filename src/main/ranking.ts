@@ -2,6 +2,7 @@ export interface VoiceChannel {
   id: string
   guildId: string
   guildName: string
+  guildIconUrl?: string
   name: string
 }
 
@@ -18,13 +19,14 @@ export interface Store {
 export interface ServerGroup {
   guildId: string
   guildName: string
+  iconUrl?: string
   channels: VoiceChannel[]
 }
 
 export function rankChannels(channels: VoiceChannel[], store: Store): ServerGroup[] {
   const byGuild = new Map<string, ServerGroup>()
   for (const c of channels) {
-    if (!byGuild.has(c.guildId)) byGuild.set(c.guildId, { guildId: c.guildId, guildName: c.guildName, channels: [] })
+    if (!byGuild.has(c.guildId)) byGuild.set(c.guildId, { guildId: c.guildId, guildName: c.guildName, iconUrl: c.guildIconUrl, channels: [] })
     byGuild.get(c.guildId)!.channels.push(c)
   }
   const favRank = new Map(store.favorites.map((id, i) => [id, i]))
