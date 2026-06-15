@@ -36,6 +36,11 @@
       "package.json",
       "node_modules/**/*"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "zeraphil",
+      "repo": "sitcord"
+    },
     "win": {
       "target": [
         "nsis",
