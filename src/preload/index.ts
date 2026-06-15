@@ -1,9 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC, type AppState } from '../shared/ipc'
+import { IPC, type AppState, type UpdateStatus } from '../shared/ipc'
 
 const api = {
   onStateUpdate(callback: (state: AppState) => void): void {
     ipcRenderer.on(IPC.STATE_UPDATE, (_event, state: AppState) => callback(state))
+  },
+  onUpdateStatus(callback: (status: UpdateStatus) => void): void {
+    ipcRenderer.on(IPC.UPDATE_STATUS, (_event, status: UpdateStatus) => callback(status))
   },
   join(channelId: string): Promise<void> {
     return ipcRenderer.invoke(IPC.VOICE_JOIN, channelId)

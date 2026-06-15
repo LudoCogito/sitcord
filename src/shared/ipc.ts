@@ -12,8 +12,16 @@ export interface AppState {
   deafened: boolean
 }
 
+// App self-update status, pushed independently of Discord state: the running
+// version (for the bottom-right corner) and whether a newer release is ready.
+export interface UpdateStatus {
+  version: string
+  updateAvailable: boolean
+}
+
 export const IPC = {
   STATE_UPDATE: 'state:update',
+  UPDATE_STATUS: 'update:status',
   VOICE_JOIN: 'voice:join',
   VOICE_DISCONNECT: 'voice:disconnect',
   VOICE_SET_MUTE: 'voice:setMute',

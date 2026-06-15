@@ -16,7 +16,8 @@ import { DiscordRpcClient } from './discord/rpc-client'
 import { DiscordService } from './service'
 import { AppStore, type WindowBounds } from './store'
 import { TRAY_ICON_DATA_URL } from './tray-icon'
-import { IPC, type AppState } from '../shared/ipc'
+import { initUpdater } from './updater'
+import { IPC, type AppState, type UpdateStatus } from '../shared/ipc'
 
 const TOGGLE_VISIBILITY_SHORTCUT = 'CommandOrControl+Shift+`'
 // Minimize/restore. Bind a controller combo to this in Steam Input for a
@@ -112,6 +113,9 @@ let appStore: AppStore | null = null
 // Last state the service pushed, replayed to a freshly (re)opened window so it
 // reflects the live connection instead of being stuck on "connecting".
 let lastState: AppState | null = null
+// Likewise for the update/version status, so a reopened window shows the corner
+// version (and any "Update available") without waiting for the next check.
+let lastUpdateStatus: UpdateStatus | null = null
 
 // Single funnel for state pushes. Guards against a destroyed window (the bug
 // behind "Object has been destroyed" on retry after a close/reopen).
@@ -119,6 +123,14 @@ function sendState(state: AppState): void {
   lastState = state
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC.STATE_UPDATE, state)
+  }
+}
+
+// Same destroyed-window guard + caching for the update/version corner.
+function sendUpdateStatus(status: UpdateStatus): void {
+  lastUpdateStatus = status
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC.UPDATE_STATUS, status)
   }
 }
 
@@ -217,6 +229,7 @@ function createWindow(store: AppStore): BrowserWindow {
   // reopened window picks up the live connection instead of showing "connecting".
   win.webContents.on('did-finish-load', () => {
     if (lastState) win.webContents.send(IPC.STATE_UPDATE, lastState)
+    if (lastUpdateStatus) win.webContents.send(IPC.UPDATE_STATUS, lastUpdateStatus)
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
@@ -282,6 +295,10 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow = createWindow(appStore)
     startService(appStore)
     tray = createTray()
+
+    // Drive the bottom-right version/update corner. No-ops past the version
+    // baseline in dev or without a configured publish provider.
+    initUpdater(sendUpdateStatus)
 
     globalShortcut.register(TOGGLE_VISIBILITY_SHORTCUT, () => toggleVisibility(ensureWindow()))
     globalShortcut.register(TOGGLE_MINIMIZE_SHORTCUT, () => toggleMinimize(ensureWindow()))

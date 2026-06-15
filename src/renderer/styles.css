@@ -423,6 +423,22 @@ body {
   letter-spacing: 0.04em;
 }
 
+/* Bottom-right corner of the legend bar: app version, or a yellow "Update
+   available" once a newer release is detected. margin-left:auto pushes it to
+   the far right regardless of what's on the left. */
+.legend-version {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.legend-version--update {
+  color: var(--favorite);
+  font-weight: 700;
+}
+
 /* The lone bottom-bar chip is clickable (opens the settings drawer). */
 .legend-chip--button {
   cursor: pointer;

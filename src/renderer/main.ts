@@ -11,7 +11,8 @@ import {
   glyphsFor,
   type ControllerKind
 } from './controller-profile'
-import type { AppState } from '../shared/ipc'
+import { updateIndicator } from './update-indicator'
+import type { AppState, UpdateStatus } from '../shared/ipc'
 
 // Root font size at scale 1.0; the rem-based stylesheet scales off this so the
 // whole UI grows/shrinks together for 10-foot/Big Picture viewing.
@@ -44,6 +45,10 @@ let state: AppState = {
 }
 let selectionIndex = 0
 let menuIndex = 0
+
+// App version / update status for the bottom-right corner of the legend bar.
+// Pushed by the main process (initUpdater); defaults to unknown until then.
+let updateStatus: UpdateStatus = { version: '', updateAvailable: false }
 
 // Whether the bottom settings/help drawer is open. The bottom bar otherwise
 // shows just the single "Settings" chip; this drawer holds the full control
@@ -382,6 +387,17 @@ function renderLegend(): HTMLElement {
   chip.addEventListener('click', () => setHelpOpen(!helpOpen))
 
   legend.appendChild(chip)
+
+  // Bottom-right corner: the running version normally, turning yellow and
+  // reading "Update available" once the main process detects a newer release.
+  const indicator = updateIndicator(updateStatus)
+  if (indicator.text) {
+    const version = document.createElement('span')
+    version.className = indicator.available ? 'legend-version legend-version--update' : 'legend-version'
+    version.textContent = indicator.text
+    legend.appendChild(version)
+  }
+
   return legend
 }
 
@@ -714,6 +730,15 @@ function handleAction(action: InputAction): void {
       break
   }
 }
+
+window.api.onUpdateStatus((next) => {
+  updateStatus = next
+  // Refresh just the corner; the legend is always in the DOM. Falls back to a
+  // full render if it isn't (shouldn't happen, but cheap insurance).
+  const legend = document.querySelector('.legend')
+  if (legend) legend.replaceWith(renderLegend())
+  else render()
+})
 
 window.api.onStateUpdate((next) => {
   state = next
