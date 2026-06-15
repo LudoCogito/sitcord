@@ -2,6 +2,7 @@ import type { EventEmitter } from 'node:events'
 import { AuthManager, type AuthStore, type RpcRequester } from './discord/auth'
 import { rankChannels, type VoiceChannel, type Store as RankingStore, type UsageEntry } from './ranking'
 import { recordJoin, toggleFavorite } from './store-logic'
+import { clampVolume } from '../shared/volume'
 import type { AppState, ConnectionStatus } from '../shared/ipc'
 
 export interface RpcConnection extends EventEmitter, RpcRequester {
@@ -47,6 +48,10 @@ export class DiscordService {
   private status: ConnectionStatus = 'connecting'
   private muted = false
   private deafened = false
+  // Discord defaults (input 0–100, output 0–200) until GET_VOICE_SETTINGS reads
+  // the real values on connect.
+  private inputVolume = 100
+  private outputVolume = 100
   private occupancyTimer: ReturnType<typeof setTimeout> | null = null
   private resolveFirstSetup: (() => void) | null = null
 
@@ -145,6 +150,20 @@ export class DiscordService {
     this.pushState()
   }
 
+  async setInputVolume(volume: number): Promise<void> {
+    const v = clampVolume(volume, 'input')
+    await this.rpc.request('SET_VOICE_SETTINGS', { input: { volume: v } })
+    this.inputVolume = v
+    this.pushState()
+  }
+
+  async setOutputVolume(volume: number): Promise<void> {
+    const v = clampVolume(volume, 'output')
+    await this.rpc.request('SET_VOICE_SETTINGS', { output: { volume: v } })
+    this.outputVolume = v
+    this.pushState()
+  }
+
   toggleFavorite(channelId: string): void {
     const next = toggleFavorite(this.store.get(), channelId)
     this.store.setFavorites(next.favorites)
@@ -232,6 +251,12 @@ export class DiscordService {
       const res = await this.rpc.request('GET_VOICE_SETTINGS', {})
       this.muted = res?.data?.mute ?? false
       this.deafened = res?.data?.deaf ?? false
+      if (typeof res?.data?.input?.volume === 'number') {
+        this.inputVolume = clampVolume(res.data.input.volume, 'input')
+      }
+      if (typeof res?.data?.output?.volume === 'number') {
+        this.outputVolume = clampVolume(res.data.output.volume, 'output')
+      }
     } catch {
       // leave the last-known mute/deafen values in place
     }
@@ -266,6 +291,12 @@ export class DiscordService {
     if (data?.evt === 'VOICE_SETTINGS_UPDATE') {
       this.muted = data.data?.mute ?? this.muted
       this.deafened = data.data?.deaf ?? this.deafened
+      if (typeof data.data?.input?.volume === 'number') {
+        this.inputVolume = clampVolume(data.data.input.volume, 'input')
+      }
+      if (typeof data.data?.output?.volume === 'number') {
+        this.outputVolume = clampVolume(data.data.output.volume, 'output')
+      }
       this.pushState()
       return
     }
@@ -297,7 +328,9 @@ export class DiscordService {
       occupancy: this.occupancy,
       favorites: store.favorites,
       muted: this.muted,
-      deafened: this.deafened
+      deafened: this.deafened,
+      inputVolume: this.inputVolume,
+      outputVolume: this.outputVolume
     })
   }
 }

@@ -1,5 +1,6 @@
 import type { NavAction } from './navigation'
 import { stepRepeat, initialRepeatState, type RepeatState } from './auto-repeat'
+import type { VolumeTarget } from '../shared/volume'
 
 export type InputAction =
   | { type: 'nav'; action: NavAction }
@@ -13,6 +14,7 @@ export type InputAction =
   | { type: 'minimize' }
   | { type: 'toggleHelp' }
   | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
+  | { type: 'adjustVolume'; target: VolumeTarget; direction: 'up' | 'down' }
 
 export type InputHandler = (action: InputAction) => void
 
@@ -24,6 +26,8 @@ const LONG_PRESS_MS = 400
 // Standard gamepad mapping button indices.
 const BUTTON_DPAD_UP = 12
 const BUTTON_DPAD_DOWN = 13
+const BUTTON_DPAD_LEFT = 14
+const BUTTON_DPAD_RIGHT = 15
 const BUTTON_LEFT_BUMPER = 4
 const BUTTON_RIGHT_BUMPER = 5
 const BUTTON_A = 0
@@ -48,6 +52,13 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
   const stickDirection = new Map<number, 'up' | 'down' | null>()
   const stickRepeat = new Map<number, RepeatState>()
   const holdState = new Map<string, { pressedAt: number; firedLong: boolean }>()
+  // Per-bumper hold tracking. `consumed` flips true once the hold is used as a
+  // volume modifier (or the window chord), so its release no longer fires group
+  // nav. Repeat/lastDir drive the accelerating volume ramp while a bumper +
+  // d-pad ◀/▶ is held.
+  const bumperHold = new Map<string, { consumed: boolean }>()
+  const bumperRepeat = new Map<string, RepeatState>()
+  const bumperDir = new Map<string, 'up' | 'down' | null>()
 
   function fireOnPress(gamepad: Gamepad, buttonIndex: number, action: InputAction): void {
     const key = `${gamepad.index}:${buttonIndex}`
@@ -104,6 +115,54 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
     if (fire) onAction({ type: 'nav', action: direction === 'up' ? 'UP' : 'DOWN' })
   }
 
+  // A bumper doubles as a volume modifier: held with d-pad ◀/▶ it adjusts a
+  // volume (LB = mic/input, RB = Discord/output) with the same accelerating
+  // auto-repeat as the stick. Group nav (its solo action) fires on *release*,
+  // and only if the hold wasn't used as a modifier — so reaching for volume
+  // doesn't also hop servers. Flipping ◀↔▶ restarts the ramp.
+  function pollBumper(
+    gamepad: Gamepad,
+    now: number,
+    bumperButton: number,
+    target: VolumeTarget,
+    navAction: NavAction
+  ): void {
+    const key = `${gamepad.index}:${bumperButton}`
+    const isPressed = gamepad.buttons[bumperButton]?.pressed ?? false
+    const prev = bumperHold.get(key)
+
+    if (!isPressed) {
+      if (prev) {
+        if (!prev.consumed) onAction({ type: 'nav', action: navAction })
+        bumperHold.delete(key)
+        bumperRepeat.delete(key)
+        bumperDir.delete(key)
+      }
+      return
+    }
+
+    const hold = prev ?? { consumed: false }
+    if (!prev) bumperHold.set(key, hold)
+
+    const left = gamepad.buttons[BUTTON_DPAD_LEFT]?.pressed ?? false
+    const right = gamepad.buttons[BUTTON_DPAD_RIGHT]?.pressed ?? false
+    const direction = right ? 'up' : left ? 'down' : null
+
+    if (direction === null) {
+      bumperRepeat.set(key, initialRepeatState)
+      bumperDir.set(key, null)
+      return
+    }
+
+    hold.consumed = true
+    const sameDirection = direction === (bumperDir.get(key) ?? null)
+    const base = sameDirection ? bumperRepeat.get(key) ?? initialRepeatState : initialRepeatState
+    bumperDir.set(key, direction)
+    const { state, fire } = stepRepeat(base, true, now)
+    bumperRepeat.set(key, state)
+    if (fire) onAction({ type: 'adjustVolume', target, direction })
+  }
+
   function poll(): void {
     if (stopped) return
 
@@ -113,8 +172,9 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
 
       fireOnPress(gamepad, BUTTON_DPAD_UP, { type: 'nav', action: 'UP' })
       fireOnPress(gamepad, BUTTON_DPAD_DOWN, { type: 'nav', action: 'DOWN' })
-      fireOnPress(gamepad, BUTTON_LEFT_BUMPER, { type: 'nav', action: 'GROUP_PREV' })
-      fireOnPress(gamepad, BUTTON_RIGHT_BUMPER, { type: 'nav', action: 'GROUP_NEXT' })
+      // Bumpers: solo tap = group nav (on release); held + d-pad ◀/▶ = volume.
+      pollBumper(gamepad, now, BUTTON_LEFT_BUMPER, 'input', 'GROUP_PREV')
+      pollBumper(gamepad, now, BUTTON_RIGHT_BUMPER, 'output', 'GROUP_NEXT')
       // A taps to join/collapse; held, it picks up the selected server to reorder.
       fireTapOrHold(gamepad, BUTTON_A, now, { type: 'join' }, { type: 'pickup' })
       fireOnPress(gamepad, BUTTON_B, { type: 'disconnect' })
@@ -138,6 +198,12 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
       const windowChordKey = `${gamepad.index}:windowChord`
       if (windowChord && !wasPressed.get(windowChordKey)) onAction({ type: 'minimize' })
       wasPressed.set(windowChordKey, windowChord)
+      // Using LB in the window chord consumes its hold so releasing it doesn't
+      // also fire a stray group-nav (the chord's whole point is to be invisible).
+      if (windowChord) {
+        const lbHold = bumperHold.get(`${gamepad.index}:${BUTTON_LEFT_BUMPER}`)
+        if (lbHold) lbHold.consumed = true
+      }
 
       pollStick(gamepad, now)
     }
@@ -172,7 +238,12 @@ const KEY_ACTIONS: Record<string, InputAction> = {
   '-': { type: 'zoom', direction: 'out' },
   '=': { type: 'zoom', direction: 'in' },
   '+': { type: 'zoom', direction: 'in' },
-  '0': { type: 'zoom', direction: 'reset' }
+  '0': { type: 'zoom', direction: 'reset' },
+  // Volume (keyboard stand-ins for LB/RB + d-pad ◀/▶): mic on [ ], Discord on ; '
+  '[': { type: 'adjustVolume', target: 'input', direction: 'down' },
+  ']': { type: 'adjustVolume', target: 'input', direction: 'up' },
+  ';': { type: 'adjustVolume', target: 'output', direction: 'down' },
+  "'": { type: 'adjustVolume', target: 'output', direction: 'up' }
 }
 
 /** Keyboard equivalents of the gamepad mapping, for development without a controller. */

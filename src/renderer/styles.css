@@ -382,6 +382,63 @@ body {
   color: #fff;
 }
 
+/* Fixed volume panel between the channel list and the legend: mic on top,
+   Discord below. flex:0 0 auto keeps it out of the scrolling list so it's
+   always on screen. The mouse drags the slider; the controller drives it via
+   the bumper + d-pad chord shown in .volume-hint. */
+.volume-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--bg-alt);
+  flex: 0 0 auto;
+}
+
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.volume-icon {
+  flex: 0 0 auto;
+  width: 1.3rem;
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+.volume-slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 0.9rem;
+  cursor: pointer;
+  /* Mic uses the brand accent; Discord (output) uses the in-channel green so
+     the two sliders read as distinct at a glance. */
+  accent-color: var(--accent);
+}
+
+.volume--output .volume-slider {
+  accent-color: var(--current);
+}
+
+.volume-value {
+  flex: 0 0 auto;
+  min-width: 1.8rem;
+  text-align: right;
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+.volume-hint {
+  flex: 0 0 auto;
+  font-size: 0.5rem;
+  letter-spacing: 0.02em;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;

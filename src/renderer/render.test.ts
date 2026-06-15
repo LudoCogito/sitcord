@@ -23,7 +23,9 @@ const state: AppState = {
   occupancy: { c1: 2, c2: 0, c3: 1 },
   favorites: ['c2'],
   muted: false,
-  deafened: false
+  deafened: false,
+  inputVolume: 100,
+  outputVolume: 100
 }
 
 describe('buildView', () => {

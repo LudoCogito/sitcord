@@ -62,6 +62,11 @@ describe('buildLegend', () => {
     expect(entries.find((e) => e.label === 'Join')?.icon).toBe('A')
     // Reorder is a long-press of the Join button (A), used on a server header.
     expect(entries.find((e) => e.label === 'Hold: reorder server')?.icon).toBe('A')
+    // Volume: hold a bumper + d-pad ◀/▶ (mic on LB, Discord on RB).
+    expect(labels).toContain('Mic volume')
+    expect(labels).toContain('Discord volume')
+    expect(entries.find((e) => e.label === 'Mic volume')?.icon).toBe('LB ◀▶')
+    expect(entries.find((e) => e.label === 'Discord volume')?.icon).toBe('RB ◀▶')
   })
 
   it('maps Join to the cross glyph on playstation', () => {

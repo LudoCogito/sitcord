@@ -250,6 +250,54 @@ describe('DiscordService', () => {
     expect(states.at(-1)?.deafened).toBe(true)
   })
 
+  it('reads initial input/output volume from Discord and applies VOICE_SETTINGS_UPDATE volumes', async () => {
+    const states: AppState[] = []
+    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const rpc = new FakeRpc({
+      ...responses,
+      GET_VOICE_SETTINGS: { data: { mute: false, deaf: false, input: { volume: 80 }, output: { volume: 150 } } }
+    })
+    const service = new DiscordService({
+      rpc,
+      store,
+      clientId: 'cid',
+      clientSecret: 'secret',
+      onStateUpdate: (s) => states.push(s),
+      now: () => 0
+    })
+    await service.start()
+
+    expect(states.at(-1)?.inputVolume).toBe(80)
+    expect(states.at(-1)?.outputVolume).toBe(150)
+
+    rpc.emit('event', {
+      cmd: 'DISPATCH',
+      evt: 'VOICE_SETTINGS_UPDATE',
+      data: { input: { volume: 60 }, output: { volume: 200 } },
+      nonce: null
+    })
+
+    expect(states.at(-1)?.inputVolume).toBe(60)
+    expect(states.at(-1)?.outputVolume).toBe(200)
+  })
+
+  it('setInputVolume / setOutputVolume send a clamped SET_VOICE_SETTINGS and push state', async () => {
+    const states: AppState[] = []
+    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const { service, rpc } = makeService(states, store)
+    await service.start()
+
+    await service.setInputVolume(72)
+    await service.setOutputVolume(500) // above the 0–200 output range
+
+    const inputCall = rpc.calls.filter((c) => c.cmd === 'SET_VOICE_SETTINGS').at(-2)
+    const outputCall = rpc.calls.filter((c) => c.cmd === 'SET_VOICE_SETTINGS').at(-1)
+    expect(inputCall?.args).toEqual({ input: { volume: 72 } })
+    expect(outputCall?.args).toEqual({ output: { volume: 200 } })
+    expect(states.at(-1)?.inputVolume).toBe(72)
+    expect(states.at(-1)?.outputVolume).toBe(200)
+  })
+
   it('VOICE_CHANNEL_SELECT updates currentChannelId and refreshes occupancy after a debounce', async () => {
     const states: AppState[] = []
     const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })

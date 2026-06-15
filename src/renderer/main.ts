@@ -12,6 +12,7 @@ import {
   type ControllerKind
 } from './controller-profile'
 import { updateIndicator } from './update-indicator'
+import { stepVolume, VOLUME_RANGES, type VolumeTarget } from '../shared/volume'
 import type { AppState, UpdateStatus } from '../shared/ipc'
 
 // Root font size at scale 1.0; the rem-based stylesheet scales off this so the
@@ -41,10 +42,18 @@ let state: AppState = {
   occupancy: {},
   favorites: [],
   muted: false,
-  deafened: false
+  deafened: false,
+  inputVolume: 100,
+  outputVolume: 100
 }
 let selectionIndex = 0
 let menuIndex = 0
+
+// True while a volume slider is being dragged with the mouse. The native range
+// input captures the pointer; a full re-render (from our own optimistic state
+// push, or an unrelated occupancy update) would replace the element and abort
+// the drag — so we suppress re-render while dragging and resync on release.
+let volumeDragging = false
 
 // App version / update status for the bottom-right corner of the legend bar.
 // Pushed by the main process (initUpdater); defaults to unknown until then.
@@ -374,6 +383,68 @@ function makeChip(entry: { icon: string; label: string }, labelClass: string): H
   return chip
 }
 
+// One always-visible volume row: an emoji, a full-width draggable slider, the
+// numeric value, and the controller shortcut hint. Kept out of the scrolling
+// channel list (the bar is fixed between the list and the legend) so it's
+// reachable without scrolling — the controller drives it via the bumper +
+// d-pad chord, the mouse via the slider.
+function volumeControl(
+  target: VolumeTarget,
+  emoji: string,
+  hint: string,
+  value: number
+): HTMLElement {
+  const { min, max, step } = VOLUME_RANGES[target]
+
+  const row = document.createElement('div')
+  row.className = `volume volume--${target}`
+
+  const icon = document.createElement('span')
+  icon.className = 'volume-icon'
+  icon.textContent = emoji
+
+  const slider = document.createElement('input')
+  slider.type = 'range'
+  slider.className = 'volume-slider'
+  slider.min = String(min)
+  slider.max = String(max)
+  slider.step = String(step)
+  slider.value = String(value)
+  slider.setAttribute('aria-label', target === 'input' ? 'Mic volume' : 'Discord volume')
+
+  const readout = document.createElement('span')
+  readout.className = 'volume-value'
+  readout.textContent = String(value)
+
+  const hintEl = document.createElement('span')
+  hintEl.className = 'volume-hint'
+  hintEl.textContent = hint
+
+  const send = target === 'input' ? window.api.setInputVolume : window.api.setOutputVolume
+  slider.addEventListener('pointerdown', () => {
+    volumeDragging = true
+  })
+  slider.addEventListener('input', () => {
+    const v = Number(slider.value)
+    readout.textContent = String(v)
+    void send(v)
+  })
+
+  row.append(icon, slider, readout, hintEl)
+  return row
+}
+
+// The fixed two-row volume panel (mic above, Discord below), shown only while
+// connected. The shortcut hints adopt the connected controller's bumper glyphs.
+function renderVolumeBar(): HTMLElement {
+  const bar = document.createElement('div')
+  bar.className = 'volume-bar'
+  const g = glyphsFor(detectConnectedController())
+  bar.appendChild(volumeControl('input', '🎤', `${g.lb} ◀▶`, state.inputVolume))
+  bar.appendChild(volumeControl('output', '🔊', `${g.rb} ◀▶`, state.outputVolume))
+  return bar
+}
+
 // The bottom bar is now a single clean row: just the Select button mapped to
 // "Settings" (→ "Close" while open), which toggles the drawer. The bar stays a
 // drag region; the chip opts out so it's clickable.
@@ -560,6 +631,7 @@ function render(): void {
   content.appendChild(list)
   content.appendChild(renderHelpDrawer('channels'))
   app.appendChild(content)
+  app.appendChild(renderVolumeBar())
   app.appendChild(renderLegend())
 
   // Scroll the selection into view *after* the legend is in the DOM. The list
@@ -728,6 +800,13 @@ function handleAction(action: InputAction): void {
       scale = adjustScale(scale, action.direction)
       applyScale()
       break
+    case 'adjustVolume': {
+      const current = action.target === 'input' ? state.inputVolume : state.outputVolume
+      const next = stepVolume(current, action.direction, action.target)
+      if (action.target === 'input') void window.api.setInputVolume(next)
+      else void window.api.setOutputVolume(next)
+      break
+    }
   }
 }
 
@@ -747,6 +826,17 @@ window.api.onStateUpdate((next) => {
   if (reorderingGuildId && !state.groups.some((g) => g.guildId === reorderingGuildId)) {
     reorderingGuildId = null
   }
+  // Don't tear down the DOM mid drag — it would abort the slider's pointer
+  // capture. The pending state is applied when the drag ends (see pointerup).
+  if (volumeDragging) return
+  render()
+})
+
+// Mouse drag ended anywhere: clear the guard and resync to the latest state
+// (which may have advanced via our optimistic pushes while we suppressed render).
+window.addEventListener('pointerup', () => {
+  if (!volumeDragging) return
+  volumeDragging = false
   render()
 })
 

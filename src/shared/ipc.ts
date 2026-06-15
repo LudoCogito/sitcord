@@ -10,6 +10,9 @@ export interface AppState {
   favorites: string[]
   muted: boolean
   deafened: boolean
+  // Discord voice volumes: input (mic) 0–100, output (everyone else) 0–200.
+  inputVolume: number
+  outputVolume: number
 }
 
 // App self-update status, pushed independently of Discord state: the running
@@ -26,6 +29,8 @@ export const IPC = {
   VOICE_DISCONNECT: 'voice:disconnect',
   VOICE_SET_MUTE: 'voice:setMute',
   VOICE_SET_DEAFEN: 'voice:setDeafen',
+  VOICE_SET_INPUT_VOLUME: 'voice:setInputVolume',
+  VOICE_SET_OUTPUT_VOLUME: 'voice:setOutputVolume',
   FAVORITE_TOGGLE: 'favorite:toggle',
   WINDOW_TOGGLE: 'window:toggle',
   WINDOW_MINIMIZE: 'window:minimize',

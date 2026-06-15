@@ -262,6 +262,8 @@ function startService(store: AppStore): DiscordService {
   ipcMain.handle(IPC.VOICE_DISCONNECT, () => service.disconnect())
   ipcMain.handle(IPC.VOICE_SET_MUTE, (_event, muted: boolean) => service.setMute(muted))
   ipcMain.handle(IPC.VOICE_SET_DEAFEN, (_event, deafened: boolean) => service.setDeafen(deafened))
+  ipcMain.handle(IPC.VOICE_SET_INPUT_VOLUME, (_event, volume: number) => service.setInputVolume(volume))
+  ipcMain.handle(IPC.VOICE_SET_OUTPUT_VOLUME, (_event, volume: number) => service.setOutputVolume(volume))
   ipcMain.handle(IPC.FAVORITE_TOGGLE, (_event, channelId: string) => service.toggleFavorite(channelId))
   ipcMain.handle(IPC.WINDOW_TOGGLE, () => toggleVisibility(ensureWindow()))
   ipcMain.handle(IPC.WINDOW_MINIMIZE, () => toggleMinimize(ensureWindow()))

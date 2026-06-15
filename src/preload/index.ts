@@ -20,6 +20,12 @@ const api = {
   setDeafen(deafened: boolean): Promise<void> {
     return ipcRenderer.invoke(IPC.VOICE_SET_DEAFEN, deafened)
   },
+  setInputVolume(volume: number): Promise<void> {
+    return ipcRenderer.invoke(IPC.VOICE_SET_INPUT_VOLUME, volume)
+  },
+  setOutputVolume(volume: number): Promise<void> {
+    return ipcRenderer.invoke(IPC.VOICE_SET_OUTPUT_VOLUME, volume)
+  },
   toggleFavorite(channelId: string): Promise<void> {
     return ipcRenderer.invoke(IPC.FAVORITE_TOGGLE, channelId)
   },

@@ -32,7 +32,9 @@ const appState: AppState = {
   occupancy: {},
   favorites: [],
   muted: false,
-  deafened: false
+  deafened: false,
+  inputVolume: 100,
+  outputVolume: 100
 }
 
 // Rows: 0 hdr g1, 1 c1, 2 c2, 3 hdr g2, 4 c3, 5 hdr g3, 6 c4, 7 c5
