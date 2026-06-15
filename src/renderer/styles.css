@@ -25,6 +25,10 @@ html,
 body {
   margin: 0;
   height: 100%;
+  /* Only the channel list scrolls. Without this, any overflow past the viewport
+     scrolls the whole page, carrying the fixed volume bar and legend up with the
+     list instead of leaving them pinned at the bottom. */
+  overflow: hidden;
 }
 
 body {
@@ -39,6 +43,9 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* Clip rather than let the column overflow the window — the inner
+     .channel-list owns scrolling, so the titlebar/volume bar/legend stay put. */
+  overflow: hidden;
 }
 
 /* Holds the list (or menu) and is the positioning context for the settings
