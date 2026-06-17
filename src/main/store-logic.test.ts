@@ -12,13 +12,15 @@ describe('recordJoin', () => {
     expect(s2.usage.a).toEqual({ count: 2, lastJoined: 200 })
   })
   it('does not mutate the input', () => {
-    recordJoin(empty, 'a', 1); expect(empty.usage.a).toBeUndefined()
+    recordJoin(empty, 'a', 1)
+    expect(empty.usage.a).toBeUndefined()
   })
 })
 
 describe('toggleFavorite', () => {
   it('adds when absent and removes when present', () => {
-    const s = toggleFavorite(empty, 'a'); expect(s.favorites).toEqual(['a'])
+    const s = toggleFavorite(empty, 'a')
+    expect(s.favorites).toEqual(['a'])
     expect(toggleFavorite(s, 'a').favorites).toEqual([])
   })
 })

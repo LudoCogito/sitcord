@@ -1,0 +1,10 @@
+out
+dist
+node_modules
+package-lock.json
+
+# Hand-written prose — don't let Prettier reflow Markdown.
+*.md
+
+# Throwaway exploration script.
+spike

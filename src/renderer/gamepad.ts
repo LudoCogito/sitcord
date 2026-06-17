@@ -107,7 +107,9 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
     }
 
     const sameDirection = direction === (stickDirection.get(gamepad.index) ?? null)
-    const prev = sameDirection ? stickRepeat.get(gamepad.index) ?? initialRepeatState : initialRepeatState
+    const prev = sameDirection
+      ? (stickRepeat.get(gamepad.index) ?? initialRepeatState)
+      : initialRepeatState
     stickDirection.set(gamepad.index, direction)
 
     const { state, fire } = stepRepeat(prev, true, now)
@@ -156,7 +158,7 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
 
     hold.consumed = true
     const sameDirection = direction === (bumperDir.get(key) ?? null)
-    const base = sameDirection ? bumperRepeat.get(key) ?? initialRepeatState : initialRepeatState
+    const base = sameDirection ? (bumperRepeat.get(key) ?? initialRepeatState) : initialRepeatState
     bumperDir.set(key, direction)
     const { state, fire } = stepRepeat(base, true, now)
     bumperRepeat.set(key, state)

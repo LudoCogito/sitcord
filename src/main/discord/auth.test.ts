@@ -25,7 +25,19 @@ class MockRpc implements RpcRequester {
 }
 
 function fetchJsonOnce(json: unknown): typeof fetch {
-  return vi.fn(async () => ({ json: async () => json })) as unknown as typeof fetch
+  return vi.fn(async () => ({
+    ok: true,
+    status: 200,
+    json: async () => json
+  })) as unknown as typeof fetch
+}
+
+function fetchErrorOnce(status: number, json: unknown): typeof fetch {
+  return vi.fn(async () => ({
+    ok: false,
+    status,
+    json: async () => json
+  })) as unknown as typeof fetch
 }
 
 afterEach(() => {
@@ -100,6 +112,20 @@ describe('AuthManager', () => {
     const body = (fetch as any).mock.calls[0][1].body as URLSearchParams
     expect(body.get('code_verifier')).toBe(VERIFIER)
     expect(body.has('client_secret')).toBe(false)
+  })
+
+  it('throws Discord error_description and does not poison the store on a failed exchange', async () => {
+    const store = new MemoryAuthStore(null)
+    const rpc = new MockRpc({ AUTHORIZE: { data: { code: 'auth-code' } } })
+    vi.stubGlobal(
+      'fetch',
+      fetchErrorOnce(400, { error: 'invalid_grant', error_description: 'Bad code' })
+    )
+
+    const auth = new AuthManager({ rpc, store, clientId: 'cid', generateVerifier: () => VERIFIER })
+
+    await expect(auth.authenticate(1000)).rejects.toThrow('Bad code')
+    expect(store.getAuth()).toBeNull()
   })
 
   it('an expired cached token triggers a fresh AUTHORIZE', async () => {

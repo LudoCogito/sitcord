@@ -49,7 +49,12 @@ describe('DiscordRpcClient', () => {
 
     transport.emit(
       'data',
-      encodeFrame(OP.FRAME, { cmd: 'GET_GUILDS', evt: null, data: { guilds: [] }, nonce: sent.nonce })
+      encodeFrame(OP.FRAME, {
+        cmd: 'GET_GUILDS',
+        evt: null,
+        data: { guilds: [] },
+        nonce: sent.nonce
+      })
     )
 
     await expect(reqPromise).resolves.toEqual({
@@ -91,10 +96,17 @@ describe('DiscordRpcClient', () => {
 
     transport.emit(
       'data',
-      encodeFrame(OP.FRAME, { cmd: 'DISPATCH', evt: 'VOICE_STATE_CREATE', data: { foo: 1 }, nonce: null })
+      encodeFrame(OP.FRAME, {
+        cmd: 'DISPATCH',
+        evt: 'VOICE_STATE_CREATE',
+        data: { foo: 1 },
+        nonce: null
+      })
     )
 
-    expect(events).toEqual([{ cmd: 'DISPATCH', evt: 'VOICE_STATE_CREATE', data: { foo: 1 }, nonce: null }])
+    expect(events).toEqual([
+      { cmd: 'DISPATCH', evt: 'VOICE_STATE_CREATE', data: { foo: 1 }, nonce: null }
+    ])
   })
 
   it('decodes a frame split across two data events', async () => {

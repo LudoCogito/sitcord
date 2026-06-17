@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { AuthData } from '../store'
+import type { RpcResponse } from './types'
 
 export interface AuthStore {
   getAuth(): AuthData | null
@@ -7,7 +8,7 @@ export interface AuthStore {
 }
 
 export interface RpcRequester {
-  request(cmd: string, args: unknown): Promise<any>
+  request(cmd: string, args: unknown): Promise<RpcResponse>
 }
 
 export interface AuthManagerOptions {
@@ -56,7 +57,7 @@ export class AuthManager {
     this.generateVerifier = options.generateVerifier ?? defaultVerifier
   }
 
-  async authenticate(now: number): Promise<any> {
+  async authenticate(now: number): Promise<RpcResponse> {
     let auth = this.store.getAuth()
     if (!auth || auth.expiresAt <= now) {
       auth = await this.authorize(now)
@@ -75,7 +76,8 @@ export class AuthManager {
       code_challenge: deriveChallenge(verifier),
       code_challenge_method: 'S256'
     })
-    const code = authorizeRes.data.code
+    const code = authorizeRes.data?.code
+    if (!code) throw new Error('Discord did not return an authorization code')
     const token = await this.exchangeCode(code, verifier)
     return { accessToken: token.access_token, expiresAt: now + token.expires_in * 1000 }
   }
@@ -100,6 +102,18 @@ export class AuthManager {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams(params)
     })
+    // A non-2xx means a misconfigured client (wrong/missing PUBLIC_OAUTH2_CLIENT
+    // flag, bad redirect, rejected PKCE, …). Surface Discord's error_description
+    // instead of returning a body with an undefined access_token, which would
+    // poison the store with a NaN expiry and fail AUTHENTICATE opaquely.
+    if (!res.ok) {
+      const detail = await res.json().then(
+        (body: { error?: string; error_description?: string }) =>
+          body?.error_description || body?.error || '',
+        () => ''
+      )
+      throw new Error(`Discord token exchange failed (${res.status})${detail ? `: ${detail}` : ''}`)
+    }
     return res.json()
   }
 }

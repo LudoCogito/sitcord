@@ -28,7 +28,11 @@ export function clampVolume(value: number, target: VolumeTarget): number {
 }
 
 /** Move `current` one step in `direction`, clamped to the target's range. */
-export function stepVolume(current: number, direction: 'up' | 'down', target: VolumeTarget): number {
+export function stepVolume(
+  current: number,
+  direction: 'up' | 'down',
+  target: VolumeTarget
+): number {
   const { step } = VOLUME_RANGES[target]
   return clampVolume(current + (direction === 'up' ? step : -step), target)
 }

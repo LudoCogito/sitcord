@@ -7,7 +7,11 @@ export function candidatePaths(env: NodeJS.ProcessEnv, platform: NodeJS.Platform
     return Array.from({ length: 10 }, (_, i) => `\\\\?\\pipe\\discord-ipc-${i}`)
   }
 
-  const dirs = [...new Set([env.XDG_RUNTIME_DIR, env.TMPDIR, '/tmp', '/var/run'].filter((d): d is string => Boolean(d)))]
+  const dirs = [
+    ...new Set(
+      [env.XDG_RUNTIME_DIR, env.TMPDIR, '/tmp', '/var/run'].filter((d): d is string => Boolean(d))
+    )
+  ]
 
   const paths: string[] = []
   for (const dir of dirs) {

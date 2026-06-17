@@ -338,11 +338,17 @@ function renderRow(row: Row): HTMLElement {
     // (X mute / Y deafen / B disconnect on Xbox; □ ○ etc. on PlayStation).
     const g = glyphsFor(detectConnectedController())
 
-    const muteBtn = rowButton(g.x, state.muted ? 'Unmute' : 'Mute', '', () =>
-      void window.api.setMute(!state.muted)
+    const muteBtn = rowButton(
+      g.x,
+      state.muted ? 'Unmute' : 'Mute',
+      '',
+      () => void window.api.setMute(!state.muted)
     )
-    const deafenBtn = rowButton(g.y, state.deafened ? 'Undeafen' : 'Deafen', '', () =>
-      void window.api.setDeafen(!state.deafened)
+    const deafenBtn = rowButton(
+      g.y,
+      state.deafened ? 'Undeafen' : 'Deafen',
+      '',
+      () => void window.api.setDeafen(!state.deafened)
     )
     const leaveBtn = rowButton(g.b, 'Leave', 'row-btn--leave', () => void window.api.disconnect())
 
@@ -525,7 +531,9 @@ function renderLegend(): HTMLElement {
   const indicator = updateIndicator(updateStatus)
   if (indicator.text) {
     const version = document.createElement('span')
-    version.className = indicator.available ? 'legend-version legend-version--update' : 'legend-version'
+    version.className = indicator.available
+      ? 'legend-version legend-version--update'
+      : 'legend-version'
     version.textContent = indicator.text
     legend.appendChild(version)
   }

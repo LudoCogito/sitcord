@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
 import { encodeFrame, decodeFrames, OP } from './frame'
 import { connectSocket } from './socket-path'
+import type { RpcResponse } from './types'
 
 export interface Transport extends EventEmitter {
   write(data: Buffer): void
@@ -16,8 +17,9 @@ export interface RpcClientOptions {
 }
 
 interface PendingRequest {
-  resolve: (data: any) => void
+  resolve: (data: RpcResponse) => void
   reject: (err: Error) => void
+  timer: ReturnType<typeof setTimeout>
 }
 
 const INITIAL_RECONNECT_DELAY_MS = 1000
@@ -25,6 +27,10 @@ const INITIAL_RECONNECT_DELAY_MS = 1000
 // pick it up within a few seconds of Discord launching, not wait out a long
 // backoff.
 const MAX_RECONNECT_DELAY_MS = 5000
+// A request whose nonce never comes back (live but unresponsive socket) would
+// otherwise hang its awaiter — and any sequential await chain — forever. Reject
+// it after this so the connect path can fall back to "disconnected".
+const REQUEST_TIMEOUT_MS = 10000
 
 export class DiscordRpcClient extends EventEmitter {
   private readonly clientId: string
@@ -90,19 +96,27 @@ export class DiscordRpcClient extends EventEmitter {
     this.transport = null
   }
 
-  request(cmd: string, args: unknown): Promise<any> {
+  request(cmd: string, args: unknown): Promise<RpcResponse> {
     return this.send({ cmd, args })
   }
 
-  subscribe(evt: string, args?: unknown): Promise<any> {
+  subscribe(evt: string, args?: unknown): Promise<RpcResponse> {
     return this.send({ cmd: 'SUBSCRIBE', args, evt })
   }
 
-  private send(payload: Record<string, unknown>): Promise<any> {
+  private send(payload: Record<string, unknown>): Promise<RpcResponse> {
     if (!this.transport) return Promise.reject(new Error('Disconnected'))
     const nonce = randomUUID()
     return new Promise((resolve, reject) => {
-      this.pending.set(nonce, { resolve, reject })
+      const timer = setTimeout(() => {
+        if (this.pending.delete(nonce)) {
+          reject(new Error(`RPC request timed out: ${String(payload.cmd ?? payload.evt)}`))
+        }
+      }, REQUEST_TIMEOUT_MS)
+      // Don't let a pending request's timeout keep the process (or a test
+      // worker) alive on its own.
+      timer.unref()
+      this.pending.set(nonce, { resolve, reject, timer })
       this.transport!.write(encodeFrame(OP.FRAME, { ...payload, nonce }))
     })
   }
@@ -114,10 +128,11 @@ export class DiscordRpcClient extends EventEmitter {
     for (const { data } of messages) this.onMessage(data)
   }
 
-  private onMessage(data: any): void {
+  private onMessage(data: RpcResponse): void {
     const nonce = data?.nonce
     if (nonce && this.pending.has(nonce)) {
-      const { resolve, reject } = this.pending.get(nonce)!
+      const { resolve, reject, timer } = this.pending.get(nonce)!
+      clearTimeout(timer)
       this.pending.delete(nonce)
       if (data.evt === 'ERROR') reject(new Error(data.data?.message ?? 'RPC error'))
       else resolve(data)
@@ -130,7 +145,10 @@ export class DiscordRpcClient extends EventEmitter {
 
   private onClose(): void {
     this.transport = null
-    for (const { reject } of this.pending.values()) reject(new Error('Disconnected'))
+    for (const { reject, timer } of this.pending.values()) {
+      clearTimeout(timer)
+      reject(new Error('Disconnected'))
+    }
     this.pending.clear()
 
     if (this.stopped) return

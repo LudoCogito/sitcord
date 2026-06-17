@@ -109,7 +109,9 @@ function launchDiscord(): void {
   }
 }
 
-// Held so it isn't garbage-collected (which would remove the icon).
+// Held so it isn't garbage-collected (which would remove the icon). Write-only
+// by design, hence the disable.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 let tray: Tray | null = null
 // Module-scoped so handlers, the tray, global shortcuts and the single-instance
 // handler all target the *current* window. On macOS closing the window destroys
@@ -117,6 +119,8 @@ let tray: Tray | null = null
 // specific instance in a long-lived closure.
 let mainWindow: BrowserWindow | null = null
 let appStore: AppStore | null = null
+// Held so app shutdown can tear it down (close the RPC socket, stop timers).
+let discordService: DiscordService | null = null
 // Last state the service pushed, replayed to a freshly (re)opened window so it
 // reflects the live connection instead of being stuck on "connecting".
 let lastState: AppState | null = null
@@ -180,7 +184,7 @@ const EDGE_MARGIN = 16
 // First-launch home: tucked into the top-right corner of the primary display's
 // work area (which excludes the taskbar/dock). After the user drags it, the
 // saved bounds take over and this is no longer used.
-function topRightPosition(width: number, height: number): { x: number; y: number } {
+function topRightPosition(width: number): { x: number; y: number } {
   const { workArea } = screen.getPrimaryDisplay()
   return {
     x: workArea.x + workArea.width - width - EDGE_MARGIN,
@@ -192,7 +196,9 @@ function topRightPosition(width: number, height: number): { x: number; y: number
 // entirely off any display; treat those as invalid and fall back to top-right.
 function isOnScreen(b: WindowBounds): boolean {
   return screen.getAllDisplays().some(({ workArea: a }) => {
-    return b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + b.height > a.y
+    return (
+      b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + b.height > a.y
+    )
   })
 }
 
@@ -201,7 +207,7 @@ function createWindow(store: AppStore): BrowserWindow {
   const width = bounds?.width ?? DEFAULT_WIDTH
   const height = bounds?.height ?? DEFAULT_HEIGHT
   const position =
-    bounds && isOnScreen(bounds) ? { x: bounds.x, y: bounds.y } : topRightPosition(width, height)
+    bounds && isOnScreen(bounds) ? { x: bounds.x, y: bounds.y } : topRightPosition(width)
 
   const iconPath = appIconPath()
 
@@ -269,9 +275,15 @@ function startService(store: AppStore): DiscordService {
   ipcMain.handle(IPC.VOICE_DISCONNECT, () => service.disconnect())
   ipcMain.handle(IPC.VOICE_SET_MUTE, (_event, muted: boolean) => service.setMute(muted))
   ipcMain.handle(IPC.VOICE_SET_DEAFEN, (_event, deafened: boolean) => service.setDeafen(deafened))
-  ipcMain.handle(IPC.VOICE_SET_INPUT_VOLUME, (_event, volume: number) => service.setInputVolume(volume))
-  ipcMain.handle(IPC.VOICE_SET_OUTPUT_VOLUME, (_event, volume: number) => service.setOutputVolume(volume))
-  ipcMain.handle(IPC.FAVORITE_TOGGLE, (_event, channelId: string) => service.toggleFavorite(channelId))
+  ipcMain.handle(IPC.VOICE_SET_INPUT_VOLUME, (_event, volume: number) =>
+    service.setInputVolume(volume)
+  )
+  ipcMain.handle(IPC.VOICE_SET_OUTPUT_VOLUME, (_event, volume: number) =>
+    service.setOutputVolume(volume)
+  )
+  ipcMain.handle(IPC.FAVORITE_TOGGLE, (_event, channelId: string) =>
+    service.toggleFavorite(channelId)
+  )
   ipcMain.handle(IPC.WINDOW_TOGGLE, () => toggleVisibility(ensureWindow()))
   ipcMain.handle(IPC.WINDOW_MINIMIZE, () => toggleMinimize(ensureWindow()))
   ipcMain.handle(IPC.LAUNCH_DISCORD, () => launchDiscord())
@@ -302,7 +314,7 @@ if (!app.requestSingleInstanceLock()) {
 
     appStore = new AppStore()
     mainWindow = createWindow(appStore)
-    startService(appStore)
+    discordService = startService(appStore)
     tray = createTray()
 
     // Drive the bottom-right version/update corner. No-ops past the version
@@ -319,6 +331,7 @@ if (!app.requestSingleInstanceLock()) {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  discordService?.stop()
 })
 
 app.on('window-all-closed', () => {

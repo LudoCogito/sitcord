@@ -44,9 +44,27 @@ describe('buildView', () => {
 
   it('marks favorites, the current channel, and occupancy counts', () => {
     const rows = buildView(state, 0)
-    expect(rows[1]).toMatchObject({ kind: 'channel', channelId: 'c1', occupancy: 2, isFavorite: false, isCurrent: false })
-    expect(rows[2]).toMatchObject({ kind: 'channel', channelId: 'c2', occupancy: 0, isFavorite: true, isCurrent: false })
-    expect(rows[4]).toMatchObject({ kind: 'channel', channelId: 'c3', occupancy: 1, isFavorite: false, isCurrent: true })
+    expect(rows[1]).toMatchObject({
+      kind: 'channel',
+      channelId: 'c1',
+      occupancy: 2,
+      isFavorite: false,
+      isCurrent: false
+    })
+    expect(rows[2]).toMatchObject({
+      kind: 'channel',
+      channelId: 'c2',
+      occupancy: 0,
+      isFavorite: true,
+      isCurrent: false
+    })
+    expect(rows[4]).toMatchObject({
+      kind: 'channel',
+      channelId: 'c3',
+      occupancy: 1,
+      isFavorite: false,
+      isCurrent: true
+    })
   })
 
   it('marks the row at selectionIndex as selected (headers are selectable too)', () => {
@@ -58,7 +76,12 @@ describe('buildView', () => {
   it('omits a collapsed group’s channel rows but keeps (and flags) its header', () => {
     const rows = buildView(state, 0, new Set(['g1']))
     expect(rows.map((r) => r.kind)).toEqual(['header', 'header', 'channel'])
-    expect(rows[0]).toMatchObject({ kind: 'header', guildId: 'g1', isCollapsed: true, channelCount: 2 })
+    expect(rows[0]).toMatchObject({
+      kind: 'header',
+      guildId: 'g1',
+      isCollapsed: true,
+      channelCount: 2
+    })
     expect(rows[1]).toMatchObject({ kind: 'header', guildId: 'g2', isCollapsed: false })
   })
 })

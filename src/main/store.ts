@@ -4,7 +4,8 @@ import type { Store, UsageEntry } from './ranking'
 // electron-store v11 is ESM-only; when bundled to CJS for the main process,
 // the default export sometimes arrives wrapped as `{ default: Store }` rather
 // than interop-unwrapped. Handle both shapes.
-const Conf = (ElectronStore as unknown as { default?: typeof ElectronStore }).default ?? ElectronStore
+const Conf =
+  (ElectronStore as unknown as { default?: typeof ElectronStore }).default ?? ElectronStore
 
 export interface AuthData {
   accessToken: string

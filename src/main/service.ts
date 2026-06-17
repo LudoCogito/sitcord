@@ -1,14 +1,21 @@
 import type { EventEmitter } from 'node:events'
 import { AuthManager, type AuthStore, type RpcRequester } from './discord/auth'
-import { rankChannels, type VoiceChannel, type Store as RankingStore, type UsageEntry } from './ranking'
+import type { RpcResponse } from './discord/types'
+import {
+  rankChannels,
+  type VoiceChannel,
+  type Store as RankingStore,
+  type UsageEntry
+} from './ranking'
 import { recordJoin, toggleFavorite } from './store-logic'
 import { clampVolume } from '../shared/volume'
 import type { AppState, ConnectionStatus } from '../shared/ipc'
 
 export interface RpcConnection extends EventEmitter, RpcRequester {
   connect(): Promise<void>
-  subscribe(evt: string, args?: unknown): Promise<any>
+  subscribe(evt: string, args?: unknown): Promise<RpcResponse>
   reconnectNow(): void
+  close(): void
 }
 
 export interface ServiceStore extends AuthStore {
@@ -67,7 +74,7 @@ export class DiscordService {
       clientId: options.clientId,
       clientSecret: options.clientSecret
     })
-    this.rpc.on('event', (data: any) => this.handleEvent(data))
+    this.rpc.on('event', (data: RpcResponse) => this.handleEvent(data))
     this.rpc.on('disconnect', () => this.onDisconnect())
   }
 
@@ -125,6 +132,17 @@ export class DiscordService {
     this.rpc.reconnectNow()
   }
 
+  /** Tear down on app quit: stop the debounce timer and close the RPC socket
+   *  (which also clears its reconnect/request timers) so nothing fires during
+   *  shutdown. */
+  stop(): void {
+    if (this.occupancyTimer) {
+      clearTimeout(this.occupancyTimer)
+      this.occupancyTimer = null
+    }
+    this.rpc.close()
+  }
+
   async join(channelId: string): Promise<void> {
     await this.rpc.request('SELECT_VOICE_CHANNEL', { channel_id: channelId, force: true })
     const next = recordJoin(this.store.get(), channelId, this.now())
@@ -173,7 +191,7 @@ export class DiscordService {
 
   private async loadChannels(): Promise<void> {
     const guildsRes = await this.rpc.request('GET_GUILDS', {})
-    const guilds: any[] = guildsRes.data?.guilds ?? []
+    const guilds = guildsRes.data?.guilds ?? []
     this.guilds = guilds.map((guild) => ({ id: guild.id, name: guild.name }))
     // Fan out per-guild channel fetches concurrently; isolate failures so one
     // guild we can't read doesn't wipe out the whole channel list. Icons are
@@ -184,16 +202,18 @@ export class DiscordService {
       guilds.map(async (guild) => {
         try {
           const channelsRes = await this.rpc.request('GET_CHANNELS', { guild_id: guild.id })
-          const channels: any[] = channelsRes.data?.channels ?? []
+          const channels = channelsRes.data?.channels ?? []
           return channels
             .filter((channel) => VOICE_CHANNEL_TYPES.has(channel.type))
-            .map((channel): VoiceChannel => ({
-              id: channel.id,
-              guildId: guild.id,
-              guildName: guild.name,
-              guildIconUrl: this.guildIconCache.get(guild.id) ?? undefined,
-              name: channel.name
-            }))
+            .map(
+              (channel): VoiceChannel => ({
+                id: channel.id,
+                guildId: guild.id,
+                guildName: guild.name,
+                guildIconUrl: this.guildIconCache.get(guild.id) ?? undefined,
+                name: channel.name
+              })
+            )
         } catch {
           return [] as VoiceChannel[]
         }
@@ -233,13 +253,23 @@ export class DiscordService {
   }
 
   private async subscribeToVoiceEvents(): Promise<void> {
-    await this.rpc.subscribe('VOICE_CHANNEL_SELECT')
-    await this.rpc.subscribe('VOICE_SETTINGS_UPDATE')
+    // Fire every SUBSCRIBE up front (in this order) and await them together,
+    // rather than serially round-tripping each one — on someone with many
+    // servers the serial version noticeably delayed the connected transition.
+    // subscribe() writes synchronously, so issuing them in-order here preserves
+    // ordering even though they resolve concurrently.
+    const subscriptions: Promise<RpcResponse>[] = [
+      this.rpc.subscribe('VOICE_CHANNEL_SELECT'),
+      this.rpc.subscribe('VOICE_SETTINGS_UPDATE')
+    ]
     for (const channel of this.channels) {
-      await this.rpc.subscribe('VOICE_STATE_CREATE', { channel_id: channel.id })
-      await this.rpc.subscribe('VOICE_STATE_UPDATE', { channel_id: channel.id })
-      await this.rpc.subscribe('VOICE_STATE_DELETE', { channel_id: channel.id })
+      subscriptions.push(
+        this.rpc.subscribe('VOICE_STATE_CREATE', { channel_id: channel.id }),
+        this.rpc.subscribe('VOICE_STATE_UPDATE', { channel_id: channel.id }),
+        this.rpc.subscribe('VOICE_STATE_DELETE', { channel_id: channel.id })
+      )
     }
+    await Promise.all(subscriptions)
   }
 
   private async refreshCurrentChannel(): Promise<void> {
@@ -279,7 +309,7 @@ export class DiscordService {
     this.occupancy = Object.fromEntries(entries)
   }
 
-  private handleEvent(data: any): void {
+  private handleEvent(data: RpcResponse): void {
     if (data?.evt === 'READY') {
       void this.onReady()
       return

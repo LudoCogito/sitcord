@@ -9,6 +9,7 @@ class FakeRpc extends EventEmitter implements RpcConnection {
   calls: { cmd: string; args: unknown }[] = []
   subscriptions: { evt: string; args: unknown }[] = []
   reconnectNowCalls = 0
+  closeCalls = 0
 
   constructor(private responses: Record<string, any>) {
     super()
@@ -20,6 +21,10 @@ class FakeRpc extends EventEmitter implements RpcConnection {
 
   reconnectNow(): void {
     this.reconnectNowCalls++
+  }
+
+  close(): void {
+    this.closeCalls++
   }
 
   async request(cmd: string, args: unknown): Promise<any> {
@@ -64,7 +69,9 @@ class MemoryStore implements ServiceStore {
 const responses = {
   AUTHENTICATE: { data: { user: { username: 'me' } } },
   GET_GUILDS: { data: { guilds: [{ id: 'g1', name: 'Guild One' }] } },
-  GET_GUILD: { data: { id: 'g1', name: 'Guild One', icon_url: 'https://cdn.discordapp.com/icons/g1/abc.png' } },
+  GET_GUILD: {
+    data: { id: 'g1', name: 'Guild One', icon_url: 'https://cdn.discordapp.com/icons/g1/abc.png' }
+  },
   GET_CHANNELS: {
     data: {
       channels: [
@@ -82,7 +89,10 @@ const responses = {
   SELECT_VOICE_CHANNEL: { data: {} }
 }
 
-function makeService(states: AppState[], store: MemoryStore): { service: DiscordService; rpc: FakeRpc } {
+function makeService(
+  states: AppState[],
+  store: MemoryStore
+): { service: DiscordService; rpc: FakeRpc } {
   const rpc = new FakeRpc(responses)
   const service = new DiscordService({
     rpc,
@@ -106,7 +116,10 @@ const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 
 describe('DiscordService', () => {
   it('start() connects, authenticates, loads channels, and pushes ranked state', async () => {
     const states: AppState[] = []
-    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: ['c2'], usage: {} })
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: ['c2'], usage: {} }
+    )
     const { service, rpc } = makeService(states, store)
 
     await service.start()
@@ -160,7 +173,10 @@ describe('DiscordService', () => {
 
   it('join() selects the channel, records usage, and pushes updated state', async () => {
     const states: AppState[] = []
-    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
     const { service, rpc } = makeService(states, store)
     await service.start()
 
@@ -176,7 +192,10 @@ describe('DiscordService', () => {
 
   it('toggleFavorite() persists favorites and pushes updated state with new ranking', async () => {
     const states: AppState[] = []
-    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
     const { service } = makeService(states, store)
     await service.start()
 
@@ -188,7 +207,10 @@ describe('DiscordService', () => {
 
   it('re-authenticates and re-subscribes when a fresh READY arrives after a reconnect', async () => {
     const states: AppState[] = []
-    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
     const { service, rpc } = makeService(states, store)
     await service.start()
 
@@ -205,7 +227,10 @@ describe('DiscordService', () => {
 
   it("sets status to 'disconnected' and pushes state when the rpc connection drops", async () => {
     const states: AppState[] = []
-    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
     const { service, rpc } = makeService(states, store)
     await service.start()
     expect(states.at(-1)?.status).toBe('connected')
@@ -215,9 +240,26 @@ describe('DiscordService', () => {
     expect(states.at(-1)?.status).toBe('disconnected')
   })
 
+  it('stop() closes the rpc connection', async () => {
+    const states: AppState[] = []
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
+    const { service, rpc } = makeService(states, store)
+    await service.start()
+
+    service.stop()
+
+    expect(rpc.closeCalls).toBe(1)
+  })
+
   it('retry() shows connecting and forces an immediate reconnect', async () => {
     const states: AppState[] = []
-    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
     const { service, rpc } = makeService(states, store)
     await service.start()
 
@@ -229,8 +271,14 @@ describe('DiscordService', () => {
 
   it('reads initial mute/deafen from Discord and applies VOICE_SETTINGS_UPDATE events', async () => {
     const states: AppState[] = []
-    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
-    const rpc = new FakeRpc({ ...responses, GET_VOICE_SETTINGS: { data: { mute: true, deaf: false } } })
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
+    const rpc = new FakeRpc({
+      ...responses,
+      GET_VOICE_SETTINGS: { data: { mute: true, deaf: false } }
+    })
     const service = new DiscordService({
       rpc,
       store,
@@ -244,7 +292,12 @@ describe('DiscordService', () => {
     expect(states.at(-1)?.muted).toBe(true)
     expect(states.at(-1)?.deafened).toBe(false)
 
-    rpc.emit('event', { cmd: 'DISPATCH', evt: 'VOICE_SETTINGS_UPDATE', data: { mute: false, deaf: true }, nonce: null })
+    rpc.emit('event', {
+      cmd: 'DISPATCH',
+      evt: 'VOICE_SETTINGS_UPDATE',
+      data: { mute: false, deaf: true },
+      nonce: null
+    })
 
     expect(states.at(-1)?.muted).toBe(false)
     expect(states.at(-1)?.deafened).toBe(true)
@@ -252,10 +305,15 @@ describe('DiscordService', () => {
 
   it('reads initial input/output volume from Discord and applies VOICE_SETTINGS_UPDATE volumes', async () => {
     const states: AppState[] = []
-    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
     const rpc = new FakeRpc({
       ...responses,
-      GET_VOICE_SETTINGS: { data: { mute: false, deaf: false, input: { volume: 80 }, output: { volume: 150 } } }
+      GET_VOICE_SETTINGS: {
+        data: { mute: false, deaf: false, input: { volume: 80 }, output: { volume: 150 } }
+      }
     })
     const service = new DiscordService({
       rpc,
@@ -283,7 +341,10 @@ describe('DiscordService', () => {
 
   it('setInputVolume / setOutputVolume send a clamped SET_VOICE_SETTINGS and push state', async () => {
     const states: AppState[] = []
-    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
     const { service, rpc } = makeService(states, store)
     await service.start()
 
@@ -300,14 +361,22 @@ describe('DiscordService', () => {
 
   it('VOICE_CHANNEL_SELECT updates currentChannelId and refreshes occupancy after a debounce', async () => {
     const states: AppState[] = []
-    const store = new MemoryStore({ accessToken: 'tok', expiresAt: Infinity }, { favorites: [], usage: {} })
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
     const { service, rpc } = makeService(states, store)
     await service.start()
     await flush() // let the lazy icon push settle first
 
     vi.useFakeTimers()
     const before = states.length
-    rpc.emit('event', { cmd: 'DISPATCH', evt: 'VOICE_CHANNEL_SELECT', data: { channel_id: 'c1' }, nonce: null })
+    rpc.emit('event', {
+      cmd: 'DISPATCH',
+      evt: 'VOICE_CHANNEL_SELECT',
+      data: { channel_id: 'c1' },
+      nonce: null
+    })
 
     // The event itself doesn't push synchronously — occupancy is debounced.
     expect(states.length).toBe(before)

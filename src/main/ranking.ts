@@ -1,38 +1,27 @@
-export interface VoiceChannel {
-  id: string
-  guildId: string
-  guildName: string
-  guildIconUrl?: string
-  name: string
-}
+import type { VoiceChannel, Store, ServerGroup } from '../shared/voice'
 
-export interface UsageEntry {
-  count: number
-  lastJoined: number
-}
-
-export interface Store {
-  favorites: string[]
-  usage: Record<string, UsageEntry>
-}
-
-export interface ServerGroup {
-  guildId: string
-  guildName: string
-  iconUrl?: string
-  channels: VoiceChannel[]
-}
+// The voice data shapes now live in `shared/voice` (so the renderer doesn't
+// depend on this main-side module). Re-exported here for the main-side callers
+// that already import them from `./ranking`.
+export type { VoiceChannel, UsageEntry, Store, ServerGroup } from '../shared/voice'
 
 export function rankChannels(channels: VoiceChannel[], store: Store): ServerGroup[] {
   const byGuild = new Map<string, ServerGroup>()
   for (const c of channels) {
-    if (!byGuild.has(c.guildId)) byGuild.set(c.guildId, { guildId: c.guildId, guildName: c.guildName, iconUrl: c.guildIconUrl, channels: [] })
+    if (!byGuild.has(c.guildId))
+      byGuild.set(c.guildId, {
+        guildId: c.guildId,
+        guildName: c.guildName,
+        iconUrl: c.guildIconUrl,
+        channels: []
+      })
     byGuild.get(c.guildId)!.channels.push(c)
   }
   const favRank = new Map(store.favorites.map((id, i) => [id, i]))
   for (const group of byGuild.values()) {
     group.channels.sort((a, b) => {
-      const fa = favRank.has(a.id), fb = favRank.has(b.id)
+      const fa = favRank.has(a.id),
+        fb = favRank.has(b.id)
       if (fa && fb) return favRank.get(a.id)! - favRank.get(b.id)!
       if (fa) return -1
       if (fb) return 1

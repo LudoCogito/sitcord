@@ -80,9 +80,7 @@ describe('buildLegend', () => {
   })
 
   it('maps show/hide to the LB+R3 chord (the order it triggers in)', () => {
-    expect(buildLegend('xbox', 'channels').find((e) => e.label === 'Show/Hide')?.icon).toBe(
-      'LB+R3'
-    )
+    expect(buildLegend('xbox', 'channels').find((e) => e.label === 'Show/Hide')?.icon).toBe('LB+R3')
     expect(buildLegend('playstation', 'channels').find((e) => e.label === 'Show/Hide')?.icon).toBe(
       'L1+R3'
     )

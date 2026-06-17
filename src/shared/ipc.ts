@@ -1,4 +1,4 @@
-import type { ServerGroup } from '../main/ranking'
+import type { ServerGroup } from './voice'
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
