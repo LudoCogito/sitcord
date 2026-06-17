@@ -408,11 +408,36 @@ body {
   gap: 0.5rem;
 }
 
+/* The icon is also the mute (mic) / deafen (headphones) button. Bare button:
+   no chrome, just the line-art SVG which inherits color via currentColor. */
 .volume-icon {
   flex: 0 0 auto;
-  width: 1.3rem;
-  text-align: center;
-  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--fg-muted);
+}
+
+.volume-icon svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.volume-icon:hover {
+  color: var(--fg);
+}
+
+/* Muted / deafened: light up in the danger color so the slash reads at a glance. */
+.volume-icon--off {
+  color: var(--danger);
+}
+
+.volume-icon--off:hover {
+  color: var(--danger);
 }
 
 .volume-slider {

@@ -383,25 +383,86 @@ function makeChip(entry: { icon: string; label: string }, labelClass: string): H
   return chip
 }
 
-// One always-visible volume row: an emoji, a full-width draggable slider, the
-// numeric value, and the controller shortcut hint. Kept out of the scrolling
-// channel list (the bar is fixed between the list and the legend) so it's
-// reachable without scrolling — the controller drives it via the bumper +
-// d-pad chord, the mouse via the slider.
-function volumeControl(
-  target: VolumeTarget,
-  emoji: string,
-  hint: string,
-  value: number
-): HTMLElement {
+// Minimalist line-art icons, drawn as inline SVG so there's no icon-library
+// dependency or license to track — these are our own paths. 24x24 viewBox,
+// `currentColor` stroke so CSS drives the color (incl. the muted/--danger state).
+const SVG_NS = 'http://www.w3.org/2000/svg'
+
+function svgChild(tag: string, attrs: Record<string, string>): SVGElement {
+  const el = document.createElementNS(SVG_NS, tag)
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v)
+  return el
+}
+
+function svgIcon(children: SVGElement[]): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '2')
+  svg.setAttribute('stroke-linecap', 'round')
+  svg.setAttribute('stroke-linejoin', 'round')
+  svg.setAttribute('aria-hidden', 'true')
+  for (const c of children) svg.appendChild(c)
+  return svg
+}
+
+// Mic capsule + cradle arc + stand; `off` adds the diagonal slash (muted).
+function micIcon(off: boolean): SVGSVGElement {
+  const parts = [
+    svgChild('rect', { x: '9', y: '3', width: '6', height: '11', rx: '3' }),
+    svgChild('path', { d: 'M5 11a7 7 0 0 0 14 0' }),
+    svgChild('line', { x1: '12', y1: '18', x2: '12', y2: '21' }),
+    svgChild('line', { x1: '8', y1: '21', x2: '16', y2: '21' })
+  ]
+  if (off) parts.push(svgChild('line', { x1: '3', y1: '3', x2: '21', y2: '21' }))
+  return svgIcon(parts)
+}
+
+// Headband arc + two earcups; `off` adds the diagonal slash (deafened).
+function headphonesIcon(off: boolean): SVGSVGElement {
+  const parts = [
+    svgChild('path', { d: 'M4 14v-2a8 8 0 0 1 16 0v2' }),
+    svgChild('rect', { x: '2.5', y: '13.5', width: '4', height: '6.5', rx: '1.5' }),
+    svgChild('rect', { x: '17.5', y: '13.5', width: '4', height: '6.5', rx: '1.5' })
+  ]
+  if (off) parts.push(svgChild('line', { x1: '3', y1: '3', x2: '21', y2: '21' }))
+  return svgIcon(parts)
+}
+
+// One always-visible volume row: a clickable status icon (mic = mute on the
+// input row, headphones = deafen on the output row), a full-width draggable
+// slider, the numeric value, and the controller shortcut hint. Kept out of the
+// scrolling channel list (the bar is fixed between the list and the legend) so
+// it's reachable without scrolling — the controller drives volume via the
+// bumper + d-pad chord and mute/deafen via X/Y; the mouse via slider + icon.
+function volumeControl(target: VolumeTarget, hint: string, value: number): HTMLElement {
   const { min, max, step } = VOLUME_RANGES[target]
 
   const row = document.createElement('div')
   row.className = `volume volume--${target}`
 
-  const icon = document.createElement('span')
+  // The icon doubles as the mute (mic) / deafen (headphones) toggle.
+  const isOff = target === 'input' ? state.muted : state.deafened
+  const icon = document.createElement('button')
+  icon.type = 'button'
   icon.className = 'volume-icon'
-  icon.textContent = emoji
+  if (isOff) icon.classList.add('volume-icon--off')
+  icon.appendChild(target === 'input' ? micIcon(state.muted) : headphonesIcon(state.deafened))
+  const label =
+    target === 'input'
+      ? state.muted
+        ? 'Unmute (X)'
+        : 'Mute (X)'
+      : state.deafened
+        ? 'Undeafen (Y)'
+        : 'Deafen (Y)'
+  icon.title = label
+  icon.setAttribute('aria-label', label)
+  icon.addEventListener('click', () => {
+    if (target === 'input') void window.api.setMute(!state.muted)
+    else void window.api.setDeafen(!state.deafened)
+  })
 
   const slider = document.createElement('input')
   slider.type = 'range'
@@ -440,8 +501,8 @@ function renderVolumeBar(): HTMLElement {
   const bar = document.createElement('div')
   bar.className = 'volume-bar'
   const g = glyphsFor(detectConnectedController())
-  bar.appendChild(volumeControl('input', '🎤', `${g.lb} ◀▶`, state.inputVolume))
-  bar.appendChild(volumeControl('output', '🔊', `${g.rb} ◀▶`, state.outputVolume))
+  bar.appendChild(volumeControl('input', `${g.lb} ◀▶`, state.inputVolume))
+  bar.appendChild(volumeControl('output', `${g.rb} ◀▶`, state.outputVolume))
   return bar
 }
 
