@@ -73,5 +73,5 @@ location with a new effective date.
 ## Contact
 
 Questions about this policy can be raised via the project's issue tracker at
-https://github.com/zeraphil/sitcord/issues, or by email at
+https://github.com/LudoCogito/sitcord/issues, or by email at
 **[your-contact-email]**.

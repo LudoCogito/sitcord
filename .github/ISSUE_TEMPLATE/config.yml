@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discord's own support
+    url: https://support.discord.com
+    about: Issues with Discord itself (not Sitcord) belong here.

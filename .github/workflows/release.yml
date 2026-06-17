@@ -1,0 +1,63 @@
+name: Release
+
+# Cut a release by pushing a tag that matches the package version, e.g.:
+#   npm version patch        # bumps package.json and creates the vX.Y.Z tag
+#   git push --follow-tags   # triggers this workflow
+#
+# electron-builder publishes a DRAFT GitHub Release and uploads each OS's
+# installers + auto-update feeds (latest*.yml) to it. Updaters do not see drafts,
+# so review the draft on GitHub and click "Publish release" when ready.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Allow a manual run against the current ref (will still publish a draft).
+  workflow_dispatch:
+
+permissions:
+  contents: write # required for electron-builder to create the release + upload assets
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build bundles
+        run: npm run build
+
+      - name: Build installers and publish draft release
+        run: npx electron-builder --publish always
+        env:
+          # GITHUB_TOKEN is provided automatically; electron-builder uses it to
+          # create the release and upload assets to LudoCogito/sitcord.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # --- Code signing (disabled until certificates are available) ---------
+          # macOS: enroll in the Apple Developer Program, export your Developer ID
+          # Application cert as base64, add these repo secrets, then UNCOMMENT the
+          # block below AND remove `"identity": null` from package.json build.mac.
+          # CSC_LINK: ${{ secrets.CSC_LINK }}                              # base64 .p12
+          # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}                             # notarization
+          # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          #
+          # Windows: an OV/EV code-signing cert (or Azure Trusted Signing) silences
+          # SmartScreen. Add the secrets and uncomment:
+          # WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}                     # base64 .pfx
+          # WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          # ---------------------------------------------------------------------

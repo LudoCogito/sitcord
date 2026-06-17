@@ -19,14 +19,14 @@ real GitHub release exists.
   bottom-right corner indicator (version normally; yellow "Update available" when
   a newer release is detected).
 - ✅ `build.publish` configured in `package.json`:
-  `{ provider: "github", owner: "zeraphil", repo: "sitcord" }`.
+  `{ provider: "github", owner: "LudoCogito", repo: "sitcord" }`.
 - ✅ Licensed **Apache-2.0** (`LICENSE` + `NOTICE`, `package.json` `license`
   field). Update the `NOTICE` copyright holder from "The Sitcord Authors" to your
   legal/preferred name.
 - ✅ `gh` CLI authenticated as `zeraphil` (scopes: `repo`, `workflow`).
 - ⬜ Everything below.
 
-**Decisions locked in:** repo will be `github.com/zeraphil/sitcord`, **public**,
+**Decisions locked in:** repo will be `github.com/LudoCogito/sitcord`, **public**,
 created when you're ready to push.
 
 ---
@@ -141,8 +141,8 @@ Run when you're ready to go public. From the repo root:
 # Sanity: make sure no secrets are about to ship. Should print nothing sensitive.
 git ls-files | grep -iE '\.env$|client.?secret|token' || echo "clean"
 
-# Create the public repo under zeraphil, add it as 'origin', and push.
-gh repo create zeraphil/sitcord \
+# Create the public repo under the LudoCogito org, add it as 'origin', and push.
+gh repo create LudoCogito/sitcord \
   --public \
   --source=. \
   --remote=origin \
@@ -164,7 +164,7 @@ git push -u origin feat/voice-ui-v1
 
 ### B3. (Done) Publish provider config
 
-`build.publish` already points at `zeraphil/sitcord`. Because the repo is
+`build.publish` already points at `LudoCogito/sitcord`. Because the repo is
 **public**, the installed app reads releases with **no embedded token** — this is
 the simple path. (If you ever switch the repo to private, the app would need a
 token at runtime; don't do that without changing this design.)
@@ -286,7 +286,7 @@ Then: `npm version patch && GH_TOKEN=$(gh auth token) npm run release`.
 
 ```bash
 # Create public repo + push (one time, when ready)
-gh repo create zeraphil/sitcord --public --source=. --remote=origin --push
+gh repo create LudoCogito/sitcord --public --source=. --remote=origin --push
 
 # Cut a release (each ship)
 npm version patch

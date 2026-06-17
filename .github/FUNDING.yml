@@ -1,0 +1,5 @@
+# Adds the "Sponsor" button to the repo. Adjust handles as needed.
+# Note: GitHub Sponsors must be enabled for the LudoCogito org for this to show.
+github: [LudoCogito]
+# Replace with your real Buy Me a Coffee handle if different.
+custom: ['https://www.buymeacoffee.com/ludocogito']

@@ -1,7 +1,7 @@
 {
   "name": "sitcord",
   "version": "0.1.0",
-  "description": "",
+  "description": "Controller-first Electron mini-UI for joining and controlling Discord voice channels.",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -11,10 +11,23 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "package": "electron-vite build && electron-builder"
+    "package": "electron-vite build && electron-builder",
+    "release": "electron-vite build && electron-builder --publish always"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "discord",
+    "voice",
+    "gamepad",
+    "controller",
+    "electron",
+    "overlay"
+  ],
+  "author": "LudoCogito",
+  "homepage": "https://github.com/LudoCogito/sitcord",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LudoCogito/sitcord.git"
+  },
   "license": "Apache-2.0",
   "dependencies": {
     "electron-store": "^11.0.2",
@@ -47,7 +60,7 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "zeraphil",
+      "owner": "LudoCogito",
       "repo": "sitcord"
     },
     "win": {

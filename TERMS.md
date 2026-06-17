@@ -80,5 +80,5 @@ limitations of liability in these Terms survive any termination.
 ## 10. Contact
 
 Questions about these Terms can be raised via the project's issue tracker at
-https://github.com/zeraphil/sitcord/issues, or by email at
+https://github.com/LudoCogito/sitcord/issues, or by email at
 **[your-contact-email]**.

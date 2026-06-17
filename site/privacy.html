@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy — Sitcord</title>
+    <meta name="description" content="Sitcord Privacy Policy." />
+    <link rel="icon" href="icon.png" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="index.html">
+          <img src="icon.png" alt="" />
+          Sitcord
+        </a>
+        <nav class="site-nav">
+          <a href="https://github.com/LudoCogito/sitcord">GitHub</a>
+          <a href="privacy.html">Privacy</a>
+          <a href="terms.html">Terms</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <article class="doc">
+        <h1>Privacy Policy</h1>
+        <p class="effective"><strong>Effective date:</strong> June 16, 2026</p>
+
+        <p>
+          This Privacy Policy explains how <strong>Sitcord</strong> ("the App", "we", "us") handles
+          information. Sitcord is a free, open-source desktop application for joining and
+          controlling Discord voice channels with a game controller.
+        </p>
+
+        <h2>The short version</h2>
+        <p>
+          Sitcord runs entirely on your own computer. It has <strong>no servers</strong>, performs
+          <strong>no analytics or tracking</strong>, and <strong>sends nothing to us</strong>. The
+          author of Sitcord never receives, stores, or sees any of your data.
+        </p>
+
+        <h2>What Sitcord stores, and where</h2>
+        <p>
+          Sitcord saves a small amount of data <strong>locally on your device</strong> so it can
+          remember your preferences between sessions. This data lives in a configuration file in
+          your operating system's standard application-data directory and is
+          <strong>never transmitted to the developer or any third party</strong> by the App. It
+          includes:
+        </p>
+        <ul>
+          <li><strong>Favorites</strong> — the voice channels you have pinned.</li>
+          <li>
+            <strong>Usage counts</strong> — how many times and when you last joined each channel,
+            used only to rank your channel list on your own machine.
+          </li>
+          <li>
+            <strong>Settings</strong> — your in-app preferences (e.g. window and volume settings).
+          </li>
+          <li>
+            <strong>Authentication token</strong> — an access token issued by Discord during login,
+            stored so you do not have to re-authorize every launch.
+          </li>
+        </ul>
+        <p>
+          You can delete all of this at any time by removing Sitcord's configuration file or
+          uninstalling the App.
+        </p>
+
+        <h2>How Sitcord interacts with Discord</h2>
+        <p>
+          Sitcord communicates
+          <strong>directly with your locally running Discord client</strong> over Discord's local
+          RPC (IPC) interface, and with Discord's own OAuth2 and API endpoints to authenticate and
+          to read your servers, voice channels, and voice state. This communication is between
+          <strong>your device and Discord</strong>.
+        </p>
+        <p>
+          When you authorize Sitcord, you grant it permission to read your voice channels and to
+          control your own voice connection (join, switch, disconnect, mute, deafen, and adjust
+          input/output volume). Sitcord requests only the scopes needed for these functions.
+        </p>
+        <p>
+          Your use of Discord is governed by Discord's own
+          <a href="https://discord.com/privacy">Privacy Policy</a> and
+          <a href="https://discord.com/terms">Terms of Service</a>.
+        </p>
+
+        <h2>Data we collect</h2>
+        <p>
+          <strong>None.</strong> Sitcord has no backend, no telemetry, and no account system of its
+          own. We do not collect, store, sell, or share any personal information.
+        </p>
+
+        <h2>Updates</h2>
+        <p>
+          Sitcord may check for new releases (for example, via GitHub) so it can offer software
+          updates. These requests are standard download/version checks and are not used to identify
+          or track you.
+        </p>
+
+        <h2>Children's privacy</h2>
+        <p>
+          Sitcord is not directed at children and does not knowingly collect information from
+          anyone. Use of Discord is subject to Discord's own minimum-age requirements.
+        </p>
+
+        <h2>Changes to this policy</h2>
+        <p>
+          If this policy changes, the updated version will be published at this same location with a
+          new effective date.
+        </p>
+
+        <h2>Contact</h2>
+        <p>
+          Questions about this policy can be raised via the project's
+          <a href="https://github.com/LudoCogito/sitcord/issues">issue tracker</a>, or by email at
+          <strong>[your-contact-email]</strong>.
+        </p>
+      </article>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>© 2026 Sitcord · Apache-2.0</span>
+        <span>
+          <a href="https://github.com/LudoCogito/sitcord">GitHub</a>
+          · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a>
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>
