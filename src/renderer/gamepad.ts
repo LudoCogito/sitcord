@@ -45,6 +45,11 @@ const BUTTON_R3 = 11
 
 const AXIS_LEFT_STICK_Y = 1
 
+/** Whether a button is currently held, tolerating a short/sparse buttons array. */
+function pressed(gamepad: Gamepad, buttonIndex: number): boolean {
+  return gamepad.buttons[buttonIndex]?.pressed ?? false
+}
+
 /** Polls connected gamepads on each animation frame, firing `onAction` on button-press edges. */
 export function startGamepadLoop(onAction: InputHandler): () => void {
   let stopped = false
@@ -62,7 +67,7 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
 
   function fireOnPress(gamepad: Gamepad, buttonIndex: number, action: InputAction): void {
     const key = `${gamepad.index}:${buttonIndex}`
-    const isPressed = gamepad.buttons[buttonIndex]?.pressed ?? false
+    const isPressed = pressed(gamepad, buttonIndex)
     if (isPressed && !wasPressed.get(key)) onAction(action)
     wasPressed.set(key, isPressed)
   }
@@ -78,7 +83,7 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
     hold: InputAction
   ): void {
     const key = `${gamepad.index}:${buttonIndex}`
-    const isPressed = gamepad.buttons[buttonIndex]?.pressed ?? false
+    const isPressed = pressed(gamepad, buttonIndex)
     const prev = holdState.get(key)
 
     if (isPressed && !prev) {
@@ -130,7 +135,7 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
     navAction: NavAction
   ): void {
     const key = `${gamepad.index}:${bumperButton}`
-    const isPressed = gamepad.buttons[bumperButton]?.pressed ?? false
+    const isPressed = pressed(gamepad, bumperButton)
     const prev = bumperHold.get(key)
 
     if (!isPressed) {
@@ -146,8 +151,8 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
     const hold = prev ?? { consumed: false }
     if (!prev) bumperHold.set(key, hold)
 
-    const left = gamepad.buttons[BUTTON_DPAD_LEFT]?.pressed ?? false
-    const right = gamepad.buttons[BUTTON_DPAD_RIGHT]?.pressed ?? false
+    const left = pressed(gamepad, BUTTON_DPAD_LEFT)
+    const right = pressed(gamepad, BUTTON_DPAD_RIGHT)
     const direction = right ? 'up' : left ? 'down' : null
 
     if (direction === null) {
@@ -194,9 +199,7 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
       // is invisible once the window parks. The window keeps polling the gamepad
       // while parked (backgroundThrottling is off), so the same chord brings it
       // back.
-      const windowChord =
-        (gamepad.buttons[BUTTON_R3]?.pressed ?? false) &&
-        (gamepad.buttons[BUTTON_LEFT_BUMPER]?.pressed ?? false)
+      const windowChord = pressed(gamepad, BUTTON_R3) && pressed(gamepad, BUTTON_LEFT_BUMPER)
       const windowChordKey = `${gamepad.index}:windowChord`
       if (windowChord && !wasPressed.get(windowChordKey)) onAction({ type: 'minimize' })
       wasPressed.set(windowChordKey, windowChord)

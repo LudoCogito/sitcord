@@ -30,6 +30,20 @@ function loadScale(): number {
 
 let scale = loadScale()
 
+// Read a persisted string[] from localStorage, tolerating missing/corrupt data.
+function loadJsonArray(key: string): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? '[]')
+    return Array.isArray(parsed) ? (parsed as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+function saveJson(key: string, value: unknown): void {
+  localStorage.setItem(key, JSON.stringify(value))
+}
+
 function applyScale(): void {
   document.documentElement.style.fontSize = `${BASE_FONT_PX * scale}px`
   localStorage.setItem(SCALE_STORAGE_KEY, String(scale))
@@ -76,12 +90,7 @@ let domSelectionIndex = -1
 const COLLAPSED_STORAGE_KEY = 'collapsedGuilds'
 
 function loadCollapsed(): Set<string> {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(COLLAPSED_STORAGE_KEY) ?? '[]')
-    return new Set(Array.isArray(parsed) ? (parsed as string[]) : [])
-  } catch {
-    return new Set()
-  }
+  return new Set(loadJsonArray(COLLAPSED_STORAGE_KEY))
 }
 
 const collapsed = loadCollapsed()
@@ -89,7 +98,7 @@ const collapsed = loadCollapsed()
 function toggleCollapse(guildId: string): void {
   if (collapsed.has(guildId)) collapsed.delete(guildId)
   else collapsed.add(guildId)
-  localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsed]))
+  saveJson(COLLAPSED_STORAGE_KEY, [...collapsed])
 }
 
 // Manual server order (guildIds), persisted renderer-side like collapse state.
@@ -97,12 +106,7 @@ function toggleCollapse(guildId: string): void {
 const SERVER_ORDER_STORAGE_KEY = 'serverOrder'
 
 function loadServerOrder(): string[] {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(SERVER_ORDER_STORAGE_KEY) ?? '[]')
-    return Array.isArray(parsed) ? (parsed as string[]) : []
-  } catch {
-    return []
-  }
+  return loadJsonArray(SERVER_ORDER_STORAGE_KEY)
 }
 
 let serverOrder = loadServerOrder()
@@ -113,7 +117,7 @@ let serverOrder = loadServerOrder()
 let reorderingGuildId: string | null = null
 
 function saveServerOrder(): void {
-  localStorage.setItem(SERVER_ORDER_STORAGE_KEY, JSON.stringify(serverOrder))
+  saveJson(SERVER_ORDER_STORAGE_KEY, serverOrder)
 }
 
 // State with its groups put into the user's manual order. Everything that reads

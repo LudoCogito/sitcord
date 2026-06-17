@@ -1,6 +1,6 @@
 import type { EventEmitter } from 'node:events'
 import { AuthManager, type AuthStore, type RpcRequester } from './discord/auth'
-import type { RpcResponse } from './discord/types'
+import type { RpcResponse, RpcData } from './discord/types'
 import {
   rankChannels,
   type VoiceChannel,
@@ -157,30 +157,39 @@ export class DiscordService {
     this.pushState()
   }
 
-  async setMute(muted: boolean): Promise<void> {
-    await this.rpc.request('SET_VOICE_SETTINGS', { mute: muted })
-    this.muted = muted
+  // Send a SET_VOICE_SETTINGS patch, then commit the matching local change and
+  // push. Shared by the mute/deafen/volume mutators, which differ only in the
+  // RPC payload and which field they update on success.
+  private async sendVoiceSetting(patch: RpcData, commit: () => void): Promise<void> {
+    await this.rpc.request('SET_VOICE_SETTINGS', patch)
+    commit()
     this.pushState()
   }
 
+  async setMute(muted: boolean): Promise<void> {
+    await this.sendVoiceSetting({ mute: muted }, () => {
+      this.muted = muted
+    })
+  }
+
   async setDeafen(deafened: boolean): Promise<void> {
-    await this.rpc.request('SET_VOICE_SETTINGS', { deaf: deafened })
-    this.deafened = deafened
-    this.pushState()
+    await this.sendVoiceSetting({ deaf: deafened }, () => {
+      this.deafened = deafened
+    })
   }
 
   async setInputVolume(volume: number): Promise<void> {
     const v = clampVolume(volume, 'input')
-    await this.rpc.request('SET_VOICE_SETTINGS', { input: { volume: v } })
-    this.inputVolume = v
-    this.pushState()
+    await this.sendVoiceSetting({ input: { volume: v } }, () => {
+      this.inputVolume = v
+    })
   }
 
   async setOutputVolume(volume: number): Promise<void> {
     const v = clampVolume(volume, 'output')
-    await this.rpc.request('SET_VOICE_SETTINGS', { output: { volume: v } })
-    this.outputVolume = v
-    this.pushState()
+    await this.sendVoiceSetting({ output: { volume: v } }, () => {
+      this.outputVolume = v
+    })
   }
 
   toggleFavorite(channelId: string): void {
@@ -277,17 +286,24 @@ export class DiscordService {
     this.currentChannelId = res.data?.id ?? null
   }
 
+  // Merge a voice-settings payload (from GET_VOICE_SETTINGS or a
+  // VOICE_SETTINGS_UPDATE dispatch) into local state. Missing fields keep their
+  // current value; volumes are clamped to Discord's per-target range.
+  private applyVoiceSettings(data: RpcData | undefined): void {
+    this.muted = data?.mute ?? this.muted
+    this.deafened = data?.deaf ?? this.deafened
+    if (typeof data?.input?.volume === 'number') {
+      this.inputVolume = clampVolume(data.input.volume, 'input')
+    }
+    if (typeof data?.output?.volume === 'number') {
+      this.outputVolume = clampVolume(data.output.volume, 'output')
+    }
+  }
+
   private async refreshVoiceSettings(): Promise<void> {
     try {
       const res = await this.rpc.request('GET_VOICE_SETTINGS', {})
-      this.muted = res?.data?.mute ?? false
-      this.deafened = res?.data?.deaf ?? false
-      if (typeof res?.data?.input?.volume === 'number') {
-        this.inputVolume = clampVolume(res.data.input.volume, 'input')
-      }
-      if (typeof res?.data?.output?.volume === 'number') {
-        this.outputVolume = clampVolume(res.data.output.volume, 'output')
-      }
+      this.applyVoiceSettings(res.data)
     } catch {
       // leave the last-known mute/deafen values in place
     }
@@ -320,14 +336,7 @@ export class DiscordService {
       return
     }
     if (data?.evt === 'VOICE_SETTINGS_UPDATE') {
-      this.muted = data.data?.mute ?? this.muted
-      this.deafened = data.data?.deaf ?? this.deafened
-      if (typeof data.data?.input?.volume === 'number') {
-        this.inputVolume = clampVolume(data.data.input.volume, 'input')
-      }
-      if (typeof data.data?.output?.volume === 'number') {
-        this.outputVolume = clampVolume(data.data.output.volume, 'output')
-      }
+      this.applyVoiceSettings(data.data)
       this.pushState()
       return
     }
