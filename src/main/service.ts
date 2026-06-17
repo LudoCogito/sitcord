@@ -21,7 +21,8 @@ export interface DiscordServiceOptions {
   rpc: RpcConnection
   store: ServiceStore
   clientId: string
-  clientSecret: string
+  // Optional: omitted for a public (PKCE) client build.
+  clientSecret?: string
   onStateUpdate: (state: AppState) => void
   now?: () => number
 }

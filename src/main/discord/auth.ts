@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto'
 import type { AuthData } from '../store'
 
 export interface AuthStore {
@@ -13,24 +14,46 @@ export interface AuthManagerOptions {
   rpc: RpcRequester
   store: AuthStore
   clientId: string
-  clientSecret: string
+  // Optional: a public (PKCE) client omits the secret entirely. Provide it only
+  // for a confidential/owner build; distributed builds leave it undefined.
+  clientSecret?: string
+  // Injectable so tests can pin the PKCE verifier; defaults to a random one.
+  generateVerifier?: () => string
 }
 
 const SCOPES = ['rpc', 'rpc.voice.read', 'rpc.voice.write']
 const REDIRECT_URI = 'http://localhost'
 const TOKEN_URL = 'https://discord.com/api/oauth2/token'
 
+function base64url(buf: Buffer): string {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+// PKCE code challenge: base64url(SHA256(verifier)) without padding. Discord only
+// supports the S256 method (not plain).
+export function deriveChallenge(verifier: string): string {
+  return base64url(createHash('sha256').update(verifier).digest())
+}
+
+// 32 random bytes → 43 base64url chars, inside Discord's 43–128 char / [A-Za-z0-9-._~]
+// requirement. A fresh verifier is generated per authorization request.
+function defaultVerifier(): string {
+  return base64url(randomBytes(32))
+}
+
 export class AuthManager {
   private readonly rpc: RpcRequester
   private readonly store: AuthStore
   private readonly clientId: string
-  private readonly clientSecret: string
+  private readonly clientSecret?: string
+  private readonly generateVerifier: () => string
 
   constructor(options: AuthManagerOptions) {
     this.rpc = options.rpc
     this.store = options.store
     this.clientId = options.clientId
     this.clientSecret = options.clientSecret
+    this.generateVerifier = options.generateVerifier ?? defaultVerifier
   }
 
   async authenticate(now: number): Promise<any> {
@@ -43,25 +66,39 @@ export class AuthManager {
   }
 
   private async authorize(now: number): Promise<AuthData> {
-    const authorizeRes = await this.rpc.request('AUTHORIZE', { client_id: this.clientId, scopes: SCOPES })
+    // PKCE: send the challenge with AUTHORIZE, keep the verifier for the token
+    // exchange. This lets a public client exchange the code with no secret.
+    const verifier = this.generateVerifier()
+    const authorizeRes = await this.rpc.request('AUTHORIZE', {
+      client_id: this.clientId,
+      scopes: SCOPES,
+      code_challenge: deriveChallenge(verifier),
+      code_challenge_method: 'S256'
+    })
     const code = authorizeRes.data.code
-    const token = await this.exchangeCode(code)
+    const token = await this.exchangeCode(code, verifier)
     return { accessToken: token.access_token, expiresAt: now + token.expires_in * 1000 }
   }
 
-  // Seam for the distribution build: swap this for a PKCE-based exchange
-  // (no client_secret, see Task 0 findings) without touching the rest of the flow.
-  private async exchangeCode(code: string): Promise<{ access_token: string; expires_in: number }> {
+  private async exchangeCode(
+    code: string,
+    verifier: string
+  ): Promise<{ access_token: string; expires_in: number }> {
+    const params: Record<string, string> = {
+      client_id: this.clientId,
+      grant_type: 'authorization_code',
+      code,
+      code_verifier: verifier,
+      redirect_uri: REDIRECT_URI
+    }
+    // Confidential/owner builds may still pass a secret; public PKCE clients omit
+    // it (requires the PUBLIC_OAUTH2_CLIENT flag on the Discord application).
+    if (this.clientSecret) params.client_secret = this.clientSecret
+
     const res = await fetch(TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: REDIRECT_URI
-      })
+      body: new URLSearchParams(params)
     })
     return res.json()
   }
