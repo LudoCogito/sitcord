@@ -38,6 +38,12 @@ jobs:
 
       - name: Build bundles
         run: npm run build
+        env:
+          # Baked into the bundle as __DISCORD_CLIENT_ID__ (electron.vite.config.ts).
+          # Not a secret (PKCE ships no client_secret) but stored as one for
+          # convenience — add it under repo Settings -> Secrets and variables ->
+          # Actions -> New repository secret.
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
 
       - name: Build installers and publish draft release
         run: npx electron-builder --publish always
