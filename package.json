@@ -1,6 +1,6 @@
 {
   "name": "sitcord",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Controller-first Electron mini-UI for joining and controlling Discord voice channels.",
   "main": "out/main/index.js",
   "scripts": {
