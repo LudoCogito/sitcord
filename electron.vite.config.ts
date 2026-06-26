@@ -11,12 +11,19 @@ try {
   // .env is optional; CI/build may set DISCORD_CLIENT_ID directly.
 }
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID ?? ''
+// TESTER BUILDS ONLY — baked in so the packaged app uses the same confidential-
+// client flow as dev mode. Discord's privileged RPC scopes (rpc.voice.write)
+// are rejected for PKCE-only public clients until RPC approval is complete.
+// TODO(Task 12): After Discord RPC approval, remove this define and update
+// beta.yml to stop passing DISCORD_CLIENT_SECRET so public builds go PKCE-only.
+const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET ?? ''
 
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     define: {
-      __DISCORD_CLIENT_ID__: JSON.stringify(CLIENT_ID)
+      __DISCORD_CLIENT_ID__: JSON.stringify(CLIENT_ID),
+      __DISCORD_CLIENT_SECRET__: JSON.stringify(CLIENT_SECRET)
     }
   },
   preload: {

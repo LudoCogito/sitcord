@@ -1,5 +1,9 @@
 name: Release
 
+# PUBLIC RELEASE WORKFLOW — no client secret, uses PKCE-only auth.
+# PREREQUISITE: Discord RPC approval must be complete (Task 12) before this
+# workflow produces working builds. Until then, use beta.yml for tester builds.
+#
 # Cut a release by pushing a tag that matches the package version, e.g.:
 #   npm version patch        # bumps package.json and creates the vX.Y.Z tag
 #   git push --follow-tags   # triggers this workflow

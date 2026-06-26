@@ -4,6 +4,8 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
 export interface AppState {
   status: ConnectionStatus
+  // Human-readable reason for a 'disconnected' status, if known.
+  statusDetail?: string
   groups: ServerGroup[]
   currentChannelId: string | null
   occupancy: Record<string, number>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { AuthManager, deriveChallenge, type AuthStore, type RpcRequester } from './auth'
+import { AuthManager, type AuthStore, type RpcRequester } from './auth'
 import type { AuthData } from '../store'
 
 // A fixed verifier so the derived PKCE challenge is deterministic in tests.
@@ -58,7 +58,7 @@ describe('AuthManager', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 
-  it('with no token: AUTHORIZE then exchanges the code, stores it, then AUTHENTICATEs', async () => {
+  it('confidential client (with secret): plain AUTHORIZE then exchanges with the secret', async () => {
     const store = new MemoryAuthStore(null)
     const rpc = new MockRpc({
       AUTHORIZE: { data: { code: 'auth-code' } },
@@ -76,12 +76,11 @@ describe('AuthManager', () => {
     await auth.authenticate(1000)
 
     expect(rpc.calls.map((c) => c.cmd)).toEqual(['AUTHORIZE', 'AUTHENTICATE'])
-    // AUTHORIZE now carries the PKCE challenge derived from the verifier.
+    // A confidential client sends a plain AUTHORIZE — no PKCE challenge. Discord's
+    // local RPC enforces stricter scope validation on the PKCE/public path.
     expect(rpc.calls[0].args).toEqual({
       client_id: 'cid',
-      scopes: ['rpc', 'rpc.voice.read', 'rpc.voice.write'],
-      code_challenge: deriveChallenge(VERIFIER),
-      code_challenge_method: 'S256'
+      scopes: ['rpc', 'rpc.voice.read', 'rpc.voice.write']
     })
     expect(rpc.calls[1].args).toEqual({ access_token: 'fresh-token' })
     expect(store.getAuth()).toEqual({ accessToken: 'fresh-token', expiresAt: 1000 + 604800 * 1000 })
@@ -92,10 +91,10 @@ describe('AuthManager', () => {
     const body = init.body as URLSearchParams
     expect(body.get('code')).toBe('auth-code')
     expect(body.get('client_id')).toBe('cid')
-    expect(body.get('code_verifier')).toBe(VERIFIER)
     expect(body.get('grant_type')).toBe('authorization_code')
-    // Secret still sent when this build provides one (confidential/owner).
+    // Confidential build: secret is sent, and no PKCE verifier accompanies it.
     expect(body.get('client_secret')).toBe('secret')
+    expect(body.has('code_verifier')).toBe(false)
   })
 
   it('public client (no secret) exchanges with PKCE and omits client_secret', async () => {

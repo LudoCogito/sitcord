@@ -1,0 +1,54 @@
+name: Beta Build
+
+# Produces tester/pre-release builds with the Discord client secret baked in.
+# This is required until Discord approves our RPC submission (Task 12), because
+# privileged scopes (rpc.voice.write) are rejected for public PKCE clients.
+#
+# IMPORTANT: These builds contain DISCORD_CLIENT_SECRET embedded in the binary.
+# Treat every artifact produced here as "testers only" — do NOT promote to a
+# production release. Before public distribution:
+#   1. Complete the Discord RPC approval process (Task 12).
+#   2. Remove DISCORD_CLIENT_SECRET from the build (electron.vite.config.ts).
+#   3. Use the release.yml workflow instead.
+#
+# Trigger: run manually from the Actions tab. After CI completes, go to
+# Releases, find the pre-release draft, verify the assets, and publish it.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  beta:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build bundles
+        run: npm run build
+        env:
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          # Baked into the binary for tester builds. Remove before public release.
+          DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
+
+      - name: Build installers and publish pre-release draft
+        run: npx electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Mark this release as a pre-release so it's visually distinct from
+          # production releases in the GitHub Releases list.
+          EP_PRE_RELEASE: true
