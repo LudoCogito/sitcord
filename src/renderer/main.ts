@@ -616,7 +616,9 @@ function renderMenu(): HTMLElement {
 
   const hint = document.createElement('div')
   hint.className = 'menu-hint'
-  hint.textContent = 'Make sure the Discord desktop app is running and signed in.'
+  hint.textContent = state.statusDetail
+    ? state.statusDetail
+    : 'Make sure the Discord desktop app is running and signed in.'
   wrap.appendChild(hint)
 
   clampMenu()

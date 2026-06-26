@@ -67,15 +67,21 @@ export class AuthManager {
   }
 
   private async authorize(now: number): Promise<AuthData> {
-    // PKCE: send the challenge with AUTHORIZE, keep the verifier for the token
-    // exchange. This lets a public client exchange the code with no secret.
-    const verifier = this.generateVerifier()
-    const authorizeRes = await this.rpc.request('AUTHORIZE', {
+    // Confidential clients (with secret) use a simple AUTHORIZE — no PKCE fields.
+    // Discord's local RPC enforces stricter scope validation (rejecting privileged
+    // scopes like rpc.voice.write) on the PKCE/public-client path. Once Discord
+    // RPC approval is granted (Task 12), switch to PKCE-only for public builds.
+    let verifier: string | undefined
+    const authorizeArgs: Record<string, unknown> = {
       client_id: this.clientId,
-      scopes: SCOPES,
-      code_challenge: deriveChallenge(verifier),
-      code_challenge_method: 'S256'
-    })
+      scopes: SCOPES
+    }
+    if (!this.clientSecret) {
+      verifier = this.generateVerifier()
+      authorizeArgs.code_challenge = deriveChallenge(verifier)
+      authorizeArgs.code_challenge_method = 'S256'
+    }
+    const authorizeRes = await this.rpc.request('AUTHORIZE', authorizeArgs)
     const code = authorizeRes.data?.code
     if (!code) throw new Error('Discord did not return an authorization code')
     const token = await this.exchangeCode(code, verifier)
@@ -84,17 +90,17 @@ export class AuthManager {
 
   private async exchangeCode(
     code: string,
-    verifier: string
+    verifier: string | undefined
   ): Promise<{ access_token: string; expires_in: number }> {
     const params: Record<string, string> = {
       client_id: this.clientId,
       grant_type: 'authorization_code',
       code,
-      code_verifier: verifier,
       redirect_uri: REDIRECT_URI
     }
-    // Confidential/owner builds may still pass a secret; public PKCE clients omit
-    // it (requires the PUBLIC_OAUTH2_CLIENT flag on the Discord application).
+    if (verifier) params.code_verifier = verifier
+    // Confidential/owner builds pass the secret; public PKCE clients omit it
+    // (requires the PUBLIC_OAUTH2_CLIENT flag on the Discord application).
     if (this.clientSecret) params.client_secret = this.clientSecret
 
     const res = await fetch(TOKEN_URL, {

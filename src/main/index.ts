@@ -34,12 +34,17 @@ try {
 // Injected at build time by electron.vite.config.ts (`define`). Falls back to
 // '' in any context where the define isn't applied (e.g. plain tsc/test).
 declare const __DISCORD_CLIENT_ID__: string
+declare const __DISCORD_CLIENT_SECRET__: string
 const BUNDLED_CLIENT_ID = typeof __DISCORD_CLIENT_ID__ === 'string' ? __DISCORD_CLIENT_ID__ : ''
+const BUNDLED_CLIENT_SECRET =
+  typeof __DISCORD_CLIENT_SECRET__ === 'string' ? __DISCORD_CLIENT_SECRET__ : ''
 
-// .env wins for local dev; the baked-in ID makes packaged builds work too.
+// .env wins for local dev; baked-in values make packaged builds work too.
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID || BUNDLED_CLIENT_ID
-// Public (PKCE) builds ship no secret; only a local owner/dev .env provides one.
-const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET ?? ''
+// For personal/tester builds the secret is baked in so packaged builds use the
+// same confidential-client flow as dev mode. Public distribution requires RPC
+// approval for privileged scopes (Task 12) — at that point ship without secret.
+const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || BUNDLED_CLIENT_SECRET
 
 // Your app icon. Drop a square PNG (1024×1024 ideal) at build/icon.png:
 //  - electron-builder uses build/ as its resources dir, so the *packaged*

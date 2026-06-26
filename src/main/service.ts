@@ -54,6 +54,7 @@ export class DiscordService {
   private currentChannelId: string | null = null
   private occupancy: Record<string, number> = {}
   private status: ConnectionStatus = 'connecting'
+  private statusDetail: string | undefined = undefined
   private muted = false
   private deafened = false
   // Discord defaults (input 0–100, output 0–200) until GET_VOICE_SETTINGS reads
@@ -98,8 +99,10 @@ export class DiscordService {
   private async onReady(): Promise<void> {
     try {
       await this.setupSession()
-    } catch {
+    } catch (err) {
+      console.error('[sitcord] setupSession failed:', err)
       this.status = 'disconnected'
+      this.statusDetail = err instanceof Error ? err.message : String(err)
       this.pushState()
     } finally {
       this.resolveFirstSetup?.()
@@ -115,6 +118,7 @@ export class DiscordService {
     await this.subscribeToVoiceEvents()
     await this.refreshOccupancy()
     this.status = 'connected'
+    this.statusDetail = undefined
     this.pushState()
     // Icons stream in after first paint; never blocks the connected state.
     void this.loadGuildIcons().catch(() => {})
@@ -122,12 +126,14 @@ export class DiscordService {
 
   private onDisconnect(): void {
     this.status = 'disconnected'
+    this.statusDetail = undefined
     this.pushState()
   }
 
   /** User-triggered "Retry": show connecting and force an immediate reconnect. */
   retry(): void {
     this.status = 'connecting'
+    this.statusDetail = undefined
     this.pushState()
     this.rpc.reconnectNow()
   }
@@ -363,6 +369,7 @@ export class DiscordService {
     const store = this.store.get()
     this.onStateUpdate({
       status: this.status,
+      statusDetail: this.statusDetail,
       groups: rankChannels(this.channels, store),
       currentChannelId: this.currentChannelId,
       occupancy: this.occupancy,
