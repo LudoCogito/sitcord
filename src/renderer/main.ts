@@ -13,7 +13,7 @@ import {
 } from './controller-profile'
 import { updateIndicator } from './update-indicator'
 import { stepVolume, VOLUME_RANGES, type VolumeTarget } from '../shared/volume'
-import type { AppState, UpdateStatus } from '../shared/ipc'
+import type { AppState, UpdateStatus, ErrorReport } from '../shared/ipc'
 
 // Root font size at scale 1.0; the rem-based stylesheet scales off this so the
 // whole UI grows/shrinks together for 10-foot/Big Picture viewing.
@@ -77,6 +77,11 @@ let updateStatus: UpdateStatus = { version: '', updateAvailable: false }
 // shows just the single "Settings" chip; this drawer holds the full control
 // list (and is where future optional settings live).
 let helpOpen = false
+
+// Latest critical error shown in the error drawer (latest-only: a new report
+// replaces any current one). null when there's nothing to show.
+let currentError: ErrorReport | null = null
+let errorOpen = false
 
 // Which row index currently carries the `.selected` highlight in the live DOM.
 // Lets a pure selection move relocate the highlight in place (moveSelection)
@@ -604,6 +609,86 @@ function renderHelpDrawer(mode: 'menu' | 'channels'): HTMLElement {
   return backdrop
 }
 
+// The critical-error drawer. Structurally mirrors the help drawer: a
+// bottom-anchored panel over a dim backdrop, animated via the `.open` class.
+// Shows the latest error only, with Submit / Dismiss controller actions.
+function renderErrorDrawer(): HTMLElement {
+  const backdrop = document.createElement('div')
+  backdrop.className = 'error-backdrop'
+  if (errorOpen) backdrop.classList.add('open')
+  backdrop.addEventListener('click', () => closeError())
+
+  const panel = document.createElement('div')
+  panel.className = 'error-panel'
+  panel.addEventListener('click', (event) => event.stopPropagation())
+
+  if (currentError) {
+    const title = document.createElement('div')
+    title.className = 'error-title'
+    title.textContent = currentError.title
+    panel.appendChild(title)
+
+    const message = document.createElement('div')
+    message.className = 'error-message'
+    message.textContent = currentError.message
+    panel.appendChild(message)
+
+    const details = document.createElement('details')
+    details.className = 'error-details'
+    const summary = document.createElement('summary')
+    summary.textContent = 'Details'
+    const pre = document.createElement('pre')
+    pre.textContent = [
+      currentError.stack ?? '(no stack)',
+      '',
+      JSON.stringify(currentError.context, null, 2)
+    ].join('\n')
+    details.append(summary, pre)
+    panel.appendChild(details)
+
+    const actions = document.createElement('div')
+    actions.className = 'error-actions'
+    const g = glyphsFor(detectConnectedController())
+    const submitBtn = makeChip({ icon: g.a, label: 'Submit' }, 'error-action-label')
+    submitBtn.className = 'error-action'
+    submitBtn.addEventListener('click', () => submitCurrentError())
+    const dismissBtn = makeChip({ icon: g.b, label: 'Dismiss' }, 'error-action-label')
+    dismissBtn.className = 'error-action'
+    dismissBtn.addEventListener('click', () => closeError())
+    actions.append(submitBtn, dismissBtn)
+    panel.appendChild(actions)
+  }
+
+  backdrop.appendChild(panel)
+  return backdrop
+}
+
+// Replace any current error with this one and slide the drawer up. Rebuilds the
+// drawer element (its contents depend on the report) and adds `.open` on the
+// next frame so the CSS transition plays.
+function showError(report: ErrorReport): void {
+  currentError = report
+  errorOpen = true
+  const content = document.querySelector('.content')
+  document.querySelector('.error-backdrop')?.remove()
+  const drawer = renderErrorDrawer()
+  drawer.classList.remove('open')
+  content?.appendChild(drawer)
+  requestAnimationFrame(() => drawer.classList.add('open'))
+}
+
+function closeError(): void {
+  errorOpen = false
+  currentError = null
+  const backdrop = document.querySelector('.error-backdrop')
+  if (backdrop) backdrop.classList.remove('open')
+}
+
+function submitCurrentError(): void {
+  if (currentError) void window.api.submitErrorReport(currentError).catch(() => {})
+  closeError()
+}
+
 function renderMenu(): HTMLElement {
   const wrap = document.createElement('div')
   wrap.className = 'menu'
@@ -666,6 +751,7 @@ function render(): void {
     content.className = 'content'
     content.appendChild(renderMenu())
     content.appendChild(renderHelpDrawer('menu'))
+    content.appendChild(renderErrorDrawer())
     app.appendChild(content)
     app.appendChild(renderLegend())
     domSelectionIndex = -1 // no channel list in the DOM
@@ -705,6 +791,7 @@ function render(): void {
   })
   content.appendChild(list)
   content.appendChild(renderHelpDrawer('channels'))
+  content.appendChild(renderErrorDrawer())
   app.appendChild(content)
   app.appendChild(renderVolumeBar())
   app.appendChild(renderLegend())
@@ -745,6 +832,14 @@ function selectedRow(): Row | null {
 }
 
 function handleAction(action: InputAction): void {
+  // The error drawer is the top modal layer: while open, A submits the report,
+  // B/Esc dismisses, and everything else is swallowed.
+  if (errorOpen) {
+    if (action.type === 'join') submitCurrentError()
+    else if (action.type === 'disconnect') closeError()
+    return
+  }
+
   // Reorder mode is modal: with a server "picked up", Up/Down move it, A/B/Y
   // drop it, zoom/window still work, and everything else is suppressed so the
   // grabbed server can't be lost mid-move. Checked first so even Select (help)
@@ -884,6 +979,8 @@ function handleAction(action: InputAction): void {
     }
   }
 }
+
+window.api.onErrorReport((report) => showError(report))
 
 window.api.onUpdateStatus((next) => {
   updateStatus = next
