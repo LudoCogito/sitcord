@@ -17,7 +17,8 @@ import { DiscordService } from './service'
 import { AppStore, type WindowBounds } from './store'
 import { TRAY_ICON_DATA_URL } from './tray-icon'
 import { initUpdater } from './updater'
-import { IPC, type AppState, type UpdateStatus } from '../shared/ipc'
+import { submitReport } from './submit-report'
+import { IPC, type AppState, type UpdateStatus, type ErrorReport } from '../shared/ipc'
 
 const TOGGLE_VISIBILITY_SHORTCUT = 'CommandOrControl+Shift+`'
 // Minimize/restore. Bind a controller combo to this in Steam Input for a
@@ -132,13 +133,27 @@ let lastState: AppState | null = null
 // Likewise for the update/version status, so a reopened window shows the corner
 // version (and any "Update available") without waiting for the next check.
 let lastUpdateStatus: UpdateStatus | null = null
+// Last critical error pushed, replayed to a freshly (re)opened window so a
+// reopened window can still show/submit it.
+let lastErrorReport: ErrorReport | null = null
 
 // Single funnel for state pushes. Guards against a destroyed window (the bug
 // behind "Object has been destroyed" on retry after a close/reopen).
 function sendState(state: AppState): void {
   lastState = state
+  // A successful connection makes any cached error stale — clear it so a
+  // reopened window doesn't replay a now-resolved problem.
+  if (state.status === 'connected') lastErrorReport = null
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC.STATE_UPDATE, state)
+  }
+}
+
+// Same destroyed-window guard + caching for critical error reports.
+function sendError(report: ErrorReport): void {
+  lastErrorReport = report
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC.ERROR_REPORT, report)
   }
 }
 
@@ -248,6 +263,7 @@ function createWindow(store: AppStore): BrowserWindow {
   win.webContents.on('did-finish-load', () => {
     if (lastState) win.webContents.send(IPC.STATE_UPDATE, lastState)
     if (lastUpdateStatus) win.webContents.send(IPC.UPDATE_STATUS, lastUpdateStatus)
+    if (lastErrorReport) win.webContents.send(IPC.ERROR_REPORT, lastErrorReport)
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
@@ -269,7 +285,9 @@ function startService(store: AppStore): DiscordService {
     clientSecret: CLIENT_SECRET,
     // Funnel through sendState so a closed/destroyed window is skipped rather
     // than throwing, and the state is cached for the next window that opens.
-    onStateUpdate: sendState
+    onStateUpdate: sendState,
+    onError: sendError,
+    appContext: { version: app.getVersion(), platform: process.platform }
   })
 
   service.start().catch((err) => {
@@ -293,6 +311,10 @@ function startService(store: AppStore): DiscordService {
   ipcMain.handle(IPC.WINDOW_MINIMIZE, () => toggleMinimize(ensureWindow()))
   ipcMain.handle(IPC.LAUNCH_DISCORD, () => launchDiscord())
   ipcMain.handle(IPC.RETRY_CONNECTION, () => service.retry())
+  ipcMain.handle(IPC.ERROR_SUBMIT, (_event, report: ErrorReport) => submitReport(report))
+  ipcMain.handle(IPC.ERROR_DISMISS, () => {
+    lastErrorReport = null
+  })
 
   return service
 }

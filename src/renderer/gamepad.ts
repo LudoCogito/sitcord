@@ -51,7 +51,10 @@ function pressed(gamepad: Gamepad, buttonIndex: number): boolean {
 }
 
 /** Polls connected gamepads on each animation frame, firing `onAction` on button-press edges. */
-export function startGamepadLoop(onAction: InputHandler): () => void {
+export function startGamepadLoop(
+  onAction: InputHandler,
+  onError?: (err: unknown) => void
+): () => void {
   let stopped = false
   const wasPressed = new Map<string, boolean>()
   const stickDirection = new Map<number, 'up' | 'down' | null>()
@@ -173,44 +176,52 @@ export function startGamepadLoop(onAction: InputHandler): () => void {
   function poll(): void {
     if (stopped) return
 
-    const now = performance.now()
-    for (const gamepad of navigator.getGamepads()) {
-      if (!gamepad) continue
+    try {
+      const now = performance.now()
+      for (const gamepad of navigator.getGamepads()) {
+        if (!gamepad) continue
 
-      fireOnPress(gamepad, BUTTON_DPAD_UP, { type: 'nav', action: 'UP' })
-      fireOnPress(gamepad, BUTTON_DPAD_DOWN, { type: 'nav', action: 'DOWN' })
-      // Bumpers: solo tap = group nav (on release); held + d-pad ◀/▶ = volume.
-      pollBumper(gamepad, now, BUTTON_LEFT_BUMPER, 'input', 'GROUP_PREV')
-      pollBumper(gamepad, now, BUTTON_RIGHT_BUMPER, 'output', 'GROUP_NEXT')
-      // A taps to join/collapse; held, it picks up the selected server to reorder.
-      fireTapOrHold(gamepad, BUTTON_A, now, { type: 'join' }, { type: 'pickup' })
-      fireOnPress(gamepad, BUTTON_B, { type: 'disconnect' })
-      fireOnPress(gamepad, BUTTON_X, { type: 'toggleMute' })
-      fireOnPress(gamepad, BUTTON_Y, { type: 'toggleDeafen' })
-      fireOnPress(gamepad, BUTTON_LEFT_TRIGGER, { type: 'zoom', direction: 'out' })
-      fireOnPress(gamepad, BUTTON_RIGHT_TRIGGER, { type: 'zoom', direction: 'in' })
-      fireOnPress(gamepad, BUTTON_START, { type: 'toggleFavorite' })
-      fireOnPress(gamepad, BUTTON_SELECT, { type: 'toggleHelp' })
+        fireOnPress(gamepad, BUTTON_DPAD_UP, { type: 'nav', action: 'UP' })
+        fireOnPress(gamepad, BUTTON_DPAD_DOWN, { type: 'nav', action: 'DOWN' })
+        // Bumpers: solo tap = group nav (on release); held + d-pad ◀/▶ = volume.
+        pollBumper(gamepad, now, BUTTON_LEFT_BUMPER, 'input', 'GROUP_PREV')
+        pollBumper(gamepad, now, BUTTON_RIGHT_BUMPER, 'output', 'GROUP_NEXT')
+        // A taps to join/collapse; held, it picks up the selected server to reorder.
+        fireTapOrHold(gamepad, BUTTON_A, now, { type: 'join' }, { type: 'pickup' })
+        fireOnPress(gamepad, BUTTON_B, { type: 'disconnect' })
+        fireOnPress(gamepad, BUTTON_X, { type: 'toggleMute' })
+        fireOnPress(gamepad, BUTTON_Y, { type: 'toggleDeafen' })
+        fireOnPress(gamepad, BUTTON_LEFT_TRIGGER, { type: 'zoom', direction: 'out' })
+        fireOnPress(gamepad, BUTTON_RIGHT_TRIGGER, { type: 'zoom', direction: 'in' })
+        fireOnPress(gamepad, BUTTON_START, { type: 'toggleFavorite' })
+        fireOnPress(gamepad, BUTTON_SELECT, { type: 'toggleHelp' })
 
-      // LB + R3 together = show/hide the window — the single window toggle. A
-      // deliberate two-button chord that won't happen by accident, and it
-      // sidesteps the LB+RB combo games lean on and the Guide button overlays
-      // reserve. LB still fires group nav on its own — the incidental group hop
-      // is invisible once the window parks. The window keeps polling the gamepad
-      // while parked (backgroundThrottling is off), so the same chord brings it
-      // back.
-      const windowChord = pressed(gamepad, BUTTON_R3) && pressed(gamepad, BUTTON_LEFT_BUMPER)
-      const windowChordKey = `${gamepad.index}:windowChord`
-      if (windowChord && !wasPressed.get(windowChordKey)) onAction({ type: 'minimize' })
-      wasPressed.set(windowChordKey, windowChord)
-      // Using LB in the window chord consumes its hold so releasing it doesn't
-      // also fire a stray group-nav (the chord's whole point is to be invisible).
-      if (windowChord) {
-        const lbHold = bumperHold.get(`${gamepad.index}:${BUTTON_LEFT_BUMPER}`)
-        if (lbHold) lbHold.consumed = true
+        // LB + R3 together = show/hide the window — the single window toggle. A
+        // deliberate two-button chord that won't happen by accident, and it
+        // sidesteps the LB+RB combo games lean on and the Guide button overlays
+        // reserve. LB still fires group nav on its own — the incidental group hop
+        // is invisible once the window parks. The window keeps polling the gamepad
+        // while parked (backgroundThrottling is off), so the same chord brings it
+        // back.
+        const windowChord = pressed(gamepad, BUTTON_R3) && pressed(gamepad, BUTTON_LEFT_BUMPER)
+        const windowChordKey = `${gamepad.index}:windowChord`
+        if (windowChord && !wasPressed.get(windowChordKey)) onAction({ type: 'minimize' })
+        wasPressed.set(windowChordKey, windowChord)
+        // Using LB in the window chord consumes its hold so releasing it doesn't
+        // also fire a stray group-nav (the chord's whole point is to be invisible).
+        if (windowChord) {
+          const lbHold = bumperHold.get(`${gamepad.index}:${BUTTON_LEFT_BUMPER}`)
+          if (lbHold) lbHold.consumed = true
+        }
+
+        pollStick(gamepad, now)
       }
-
-      pollStick(gamepad, now)
+    } catch (err) {
+      // The rAF loop is dead once a frame throws; stop it and surface the crash
+      // rather than spinning on the same error every frame.
+      stopped = true
+      onError?.(err)
+      return
     }
 
     requestAnimationFrame(poll)
@@ -252,12 +263,19 @@ const KEY_ACTIONS: Record<string, InputAction> = {
 }
 
 /** Keyboard equivalents of the gamepad mapping, for development without a controller. */
-export function startKeyboardFallback(onAction: InputHandler): () => void {
+export function startKeyboardFallback(
+  onAction: InputHandler,
+  onError?: (err: unknown) => void
+): () => void {
   function handleKeydown(event: KeyboardEvent): void {
     const action = KEY_ACTIONS[event.key]
     if (!action) return
     event.preventDefault()
-    onAction(action)
+    try {
+      onAction(action)
+    } catch (err) {
+      onError?.(err)
+    }
   }
 
   window.addEventListener('keydown', handleKeydown)

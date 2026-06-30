@@ -13,7 +13,8 @@ import {
 } from './controller-profile'
 import { updateIndicator } from './update-indicator'
 import { stepVolume, VOLUME_RANGES, type VolumeTarget } from '../shared/volume'
-import type { AppState, UpdateStatus } from '../shared/ipc'
+import type { AppState, UpdateStatus, ErrorReport } from '../shared/ipc'
+import { buildErrorReport } from '../shared/error-report'
 
 // Root font size at scale 1.0; the rem-based stylesheet scales off this so the
 // whole UI grows/shrinks together for 10-foot/Big Picture viewing.
@@ -77,6 +78,11 @@ let updateStatus: UpdateStatus = { version: '', updateAvailable: false }
 // shows just the single "Settings" chip; this drawer holds the full control
 // list (and is where future optional settings live).
 let helpOpen = false
+
+// Latest critical error shown in the error drawer (latest-only: a new report
+// replaces any current one). null when there's nothing to show.
+let currentError: ErrorReport | null = null
+let errorOpen = false
 
 // Which row index currently carries the `.selected` highlight in the live DOM.
 // Lets a pure selection move relocate the highlight in place (moveSelection)
@@ -207,8 +213,8 @@ function wireHeaderDrag(el: HTMLElement, guildId: string): void {
 // controller-focusable: UP/DOWN move between them, A activates the highlighted
 // one.
 const MENU_ITEMS: { label: string; run: () => void }[] = [
-  { label: 'Launch Discord', run: () => void window.api.launchDiscord() },
-  { label: 'Retry connection', run: () => void window.api.retryConnection() }
+  { label: 'Launch Discord', run: () => void window.api.launchDiscord().catch(() => {}) },
+  { label: 'Retry connection', run: () => void window.api.retryConnection().catch(() => {}) }
 ]
 
 function channelCount(s: AppState): number {
@@ -346,15 +352,20 @@ function renderRow(row: Row): HTMLElement {
       g.x,
       state.muted ? 'Unmute' : 'Mute',
       '',
-      () => void window.api.setMute(!state.muted)
+      () => void window.api.setMute(!state.muted).catch(() => {})
     )
     const deafenBtn = rowButton(
       g.y,
       state.deafened ? 'Undeafen' : 'Deafen',
       '',
-      () => void window.api.setDeafen(!state.deafened)
+      () => void window.api.setDeafen(!state.deafened).catch(() => {})
     )
-    const leaveBtn = rowButton(g.b, 'Leave', 'row-btn--leave', () => void window.api.disconnect())
+    const leaveBtn = rowButton(
+      g.b,
+      'Leave',
+      'row-btn--leave',
+      () => void window.api.disconnect().catch(() => {})
+    )
 
     controls.append(muteBtn, deafenBtn, leaveBtn)
     el.appendChild(controls)
@@ -470,8 +481,8 @@ function volumeControl(target: VolumeTarget, hint: string, value: number): HTMLE
   icon.title = label
   icon.setAttribute('aria-label', label)
   icon.addEventListener('click', () => {
-    if (target === 'input') void window.api.setMute(!state.muted)
-    else void window.api.setDeafen(!state.deafened)
+    if (target === 'input') void window.api.setMute(!state.muted).catch(() => {})
+    else void window.api.setDeafen(!state.deafened).catch(() => {})
   })
 
   const slider = document.createElement('input')
@@ -498,7 +509,7 @@ function volumeControl(target: VolumeTarget, hint: string, value: number): HTMLE
   slider.addEventListener('input', () => {
     const v = Number(slider.value)
     readout.textContent = String(v)
-    void send(v)
+    void send(v).catch(() => {})
   })
 
   row.append(icon, slider, readout, hintEl)
@@ -604,6 +615,97 @@ function renderHelpDrawer(mode: 'menu' | 'channels'): HTMLElement {
   return backdrop
 }
 
+// The critical-error drawer. Structurally mirrors the help drawer: a
+// bottom-anchored panel over a dim backdrop, animated via the `.open` class.
+// Shows the latest error only, with Submit / Dismiss controller actions.
+function renderErrorDrawer(): HTMLElement {
+  const backdrop = document.createElement('div')
+  backdrop.className = 'error-backdrop'
+  if (errorOpen) backdrop.classList.add('open')
+  backdrop.addEventListener('click', () => closeError())
+
+  const panel = document.createElement('div')
+  panel.className = 'error-panel'
+  panel.addEventListener('click', (event) => event.stopPropagation())
+
+  if (currentError) {
+    const title = document.createElement('div')
+    title.className = 'error-title'
+    title.textContent = currentError.title
+    panel.appendChild(title)
+
+    const message = document.createElement('div')
+    message.className = 'error-message'
+    message.textContent = currentError.message
+    panel.appendChild(message)
+
+    const details = document.createElement('details')
+    details.className = 'error-details'
+    const summary = document.createElement('summary')
+    summary.textContent = 'Details'
+    const pre = document.createElement('pre')
+    pre.textContent = [
+      currentError.stack ?? '(no stack)',
+      '',
+      JSON.stringify(currentError.context, null, 2)
+    ].join('\n')
+    details.append(summary, pre)
+    panel.appendChild(details)
+
+    const actions = document.createElement('div')
+    actions.className = 'error-actions'
+    const g = glyphsFor(detectConnectedController())
+    const submitBtn = makeChip({ icon: g.a, label: 'Submit' }, 'error-action-label')
+    submitBtn.className = 'error-action'
+    submitBtn.addEventListener('click', () => submitCurrentError())
+    const dismissBtn = makeChip({ icon: g.b, label: 'Dismiss' }, 'error-action-label')
+    dismissBtn.className = 'error-action'
+    dismissBtn.addEventListener('click', () => closeError())
+    actions.append(submitBtn, dismissBtn)
+    panel.appendChild(actions)
+  }
+
+  backdrop.appendChild(panel)
+  return backdrop
+}
+
+// Replace any current error with this one and slide the drawer up. Rebuilds the
+// drawer element (its contents depend on the report) and adds `.open` on the
+// next frame so the CSS transition plays.
+function showError(report: ErrorReport): void {
+  currentError = report
+  errorOpen = true
+  const content = document.querySelector('.content')
+  document.querySelector('.error-backdrop')?.remove()
+  const drawer = renderErrorDrawer()
+  drawer.classList.remove('open')
+  content?.appendChild(drawer)
+  requestAnimationFrame(() => drawer.classList.add('open'))
+}
+
+function closeError(): void {
+  errorOpen = false
+  currentError = null
+  const backdrop = document.querySelector('.error-backdrop')
+  if (backdrop) backdrop.classList.remove('open')
+  void window.api.dismissErrorReport().catch(() => {})
+}
+
+function submitCurrentError(): void {
+  if (currentError) void window.api.submitErrorReport(currentError).catch(() => {})
+  closeError()
+}
+
+// Context for a renderer-originated report. version comes from the update
+// status push (may be '' before it arrives); platform from the user agent.
+function rendererContext(): ErrorReport['context'] {
+  return { version: updateStatus.version || 'unknown', platform: navigator.userAgent }
+}
+
+function reportLocalError(err: unknown, category: ErrorReport['category']): void {
+  showError(buildErrorReport(err, category, rendererContext(), Date.now(), crypto.randomUUID()))
+}
+
 function renderMenu(): HTMLElement {
   const wrap = document.createElement('div')
   wrap.className = 'menu'
@@ -666,6 +768,7 @@ function render(): void {
     content.className = 'content'
     content.appendChild(renderMenu())
     content.appendChild(renderHelpDrawer('menu'))
+    content.appendChild(renderErrorDrawer())
     app.appendChild(content)
     app.appendChild(renderLegend())
     domSelectionIndex = -1 // no channel list in the DOM
@@ -697,7 +800,7 @@ function render(): void {
       // primary mouse action for a voice switcher.
       el.addEventListener('click', () => {
         selectionIndex = index
-        void window.api.join(channelId)
+        void window.api.join(channelId).catch(() => {})
         render()
       })
     }
@@ -705,6 +808,7 @@ function render(): void {
   })
   content.appendChild(list)
   content.appendChild(renderHelpDrawer('channels'))
+  content.appendChild(renderErrorDrawer())
   app.appendChild(content)
   app.appendChild(renderVolumeBar())
   app.appendChild(renderLegend())
@@ -745,6 +849,14 @@ function selectedRow(): Row | null {
 }
 
 function handleAction(action: InputAction): void {
+  // The error drawer is the top modal layer: while open, A submits the report,
+  // B/Esc dismisses, and everything else is swallowed.
+  if (errorOpen) {
+    if (action.type === 'join') submitCurrentError()
+    else if (action.type === 'disconnect') closeError()
+    return
+  }
+
   // Reorder mode is modal: with a server "picked up", Up/Down move it, A/B/Y
   // drop it, zoom/window still work, and everything else is suppressed so the
   // grabbed server can't be lost mid-move. Checked first so even Select (help)
@@ -771,10 +883,10 @@ function handleAction(action: InputAction): void {
         applyScale()
         return
       case 'toggleVisibility':
-        void window.api.toggleVisibility()
+        void window.api.toggleVisibility().catch(() => {})
         return
       case 'minimize':
-        void window.api.minimize()
+        void window.api.minimize().catch(() => {})
         return
       default:
         return
@@ -811,10 +923,10 @@ function handleAction(action: InputAction): void {
         applyScale()
         return
       case 'toggleVisibility':
-        void window.api.toggleVisibility()
+        void window.api.toggleVisibility().catch(() => {})
         return
       case 'minimize':
-        void window.api.minimize()
+        void window.api.minimize().catch(() => {})
         return
       default:
         return
@@ -835,18 +947,18 @@ function handleAction(action: InputAction): void {
         toggleCollapse(row.guildId)
         render()
       } else if (row?.kind === 'channel') {
-        void window.api.join(row.channelId)
+        void window.api.join(row.channelId).catch(() => {})
       }
       break
     }
     case 'disconnect':
-      void window.api.disconnect()
+      void window.api.disconnect().catch(() => {})
       break
     case 'toggleMute':
-      void window.api.setMute(!state.muted)
+      void window.api.setMute(!state.muted).catch(() => {})
       break
     case 'toggleDeafen':
-      void window.api.setDeafen(!state.deafened)
+      void window.api.setDeafen(!state.deafened).catch(() => {})
       break
     case 'pickup': {
       // Long-press A on a server header picks it up for reordering; on a channel
@@ -856,20 +968,20 @@ function handleAction(action: InputAction): void {
         reorderingGuildId = row.guildId
         render()
       } else if (row?.kind === 'channel') {
-        void window.api.join(row.channelId)
+        void window.api.join(row.channelId).catch(() => {})
       }
       break
     }
     case 'toggleFavorite': {
       const row = selectedRow()
-      if (row?.kind === 'channel') void window.api.toggleFavorite(row.channelId)
+      if (row?.kind === 'channel') void window.api.toggleFavorite(row.channelId).catch(() => {})
       break
     }
     case 'toggleVisibility':
-      void window.api.toggleVisibility()
+      void window.api.toggleVisibility().catch(() => {})
       break
     case 'minimize':
-      void window.api.minimize()
+      void window.api.minimize().catch(() => {})
       break
     case 'zoom':
       scale = adjustScale(scale, action.direction)
@@ -878,12 +990,14 @@ function handleAction(action: InputAction): void {
     case 'adjustVolume': {
       const current = action.target === 'input' ? state.inputVolume : state.outputVolume
       const next = stepVolume(current, action.direction, action.target)
-      if (action.target === 'input') void window.api.setInputVolume(next)
-      else void window.api.setOutputVolume(next)
+      if (action.target === 'input') void window.api.setInputVolume(next).catch(() => {})
+      else void window.api.setOutputVolume(next).catch(() => {})
       break
     }
   }
 }
+
+window.api.onErrorReport((report) => showError(report))
 
 window.api.onUpdateStatus((next) => {
   updateStatus = next
@@ -915,8 +1029,19 @@ window.addEventListener('pointerup', () => {
   render()
 })
 
-startGamepadLoop(handleAction)
-startKeyboardFallback(handleAction)
+startGamepadLoop(handleAction, (err) => reportLocalError(err, 'controller'))
+startKeyboardFallback(handleAction, (err) => reportLocalError(err, 'controller'))
+
+// Uncaught UI exceptions are real crashes → surface them. Recoverable promise
+// rejections (e.g. a single rejected voice command) are logged, never surfaced
+// (per the critical-only rule): swallow them so they don't become noise.
+window.addEventListener('error', (event) =>
+  reportLocalError(event.error ?? event.message, 'unknown')
+)
+window.addEventListener('unhandledrejection', (event) => {
+  event.preventDefault()
+  console.warn('Recoverable rejection (not surfaced):', event.reason)
+})
 
 // Re-render so the legend adopts the glyphs of whatever just (dis)connected.
 window.addEventListener('gamepadconnected', render)

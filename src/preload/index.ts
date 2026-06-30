@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC, type AppState, type UpdateStatus } from '../shared/ipc'
+import { IPC, type AppState, type UpdateStatus, type ErrorReport } from '../shared/ipc'
 
 const api = {
   onStateUpdate(callback: (state: AppState) => void): void {
@@ -7,6 +7,15 @@ const api = {
   },
   onUpdateStatus(callback: (status: UpdateStatus) => void): void {
     ipcRenderer.on(IPC.UPDATE_STATUS, (_event, status: UpdateStatus) => callback(status))
+  },
+  onErrorReport(callback: (report: ErrorReport) => void): void {
+    ipcRenderer.on(IPC.ERROR_REPORT, (_event, report: ErrorReport) => callback(report))
+  },
+  submitErrorReport(report: ErrorReport): Promise<void> {
+    return ipcRenderer.invoke(IPC.ERROR_SUBMIT, report)
+  },
+  dismissErrorReport(): Promise<void> {
+    return ipcRenderer.invoke(IPC.ERROR_DISMISS)
   },
   join(channelId: string): Promise<void> {
     return ipcRenderer.invoke(IPC.VOICE_JOIN, channelId)
