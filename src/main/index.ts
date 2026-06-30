@@ -141,6 +141,9 @@ let lastErrorReport: ErrorReport | null = null
 // behind "Object has been destroyed" on retry after a close/reopen).
 function sendState(state: AppState): void {
   lastState = state
+  // A successful connection makes any cached error stale — clear it so a
+  // reopened window doesn't replay a now-resolved problem.
+  if (state.status === 'connected') lastErrorReport = null
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC.STATE_UPDATE, state)
   }
@@ -309,6 +312,9 @@ function startService(store: AppStore): DiscordService {
   ipcMain.handle(IPC.LAUNCH_DISCORD, () => launchDiscord())
   ipcMain.handle(IPC.RETRY_CONNECTION, () => service.retry())
   ipcMain.handle(IPC.ERROR_SUBMIT, (_event, report: ErrorReport) => submitReport(report))
+  ipcMain.handle(IPC.ERROR_DISMISS, () => {
+    lastErrorReport = null
+  })
 
   return service
 }

@@ -14,6 +14,9 @@ const api = {
   submitErrorReport(report: ErrorReport): Promise<void> {
     return ipcRenderer.invoke(IPC.ERROR_SUBMIT, report)
   },
+  dismissErrorReport(): Promise<void> {
+    return ipcRenderer.invoke(IPC.ERROR_DISMISS)
+  },
   join(channelId: string): Promise<void> {
     return ipcRenderer.invoke(IPC.VOICE_JOIN, channelId)
   },

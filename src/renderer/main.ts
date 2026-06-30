@@ -688,6 +688,7 @@ function closeError(): void {
   currentError = null
   const backdrop = document.querySelector('.error-backdrop')
   if (backdrop) backdrop.classList.remove('open')
+  void window.api.dismissErrorReport().catch(() => {})
 }
 
 function submitCurrentError(): void {

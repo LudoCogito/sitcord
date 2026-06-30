@@ -37,10 +37,17 @@ export function formatReportText(report: ErrorReport): string {
 // and point at the clipboard fallback.
 export function buildMailtoUrl(report: ErrorReport, maxBody = MAX_MAILTO_BODY): string {
   const full = formatReportText(report)
+  let truncated = full.length > maxBody ? full.slice(0, maxBody) : full
+  // Drop a trailing lone high surrogate left by slicing mid-astral-char so
+  // encodeURIComponent doesn't throw URIError.
+  if (
+    truncated.charCodeAt(truncated.length - 1) >= 0xd800 &&
+    truncated.charCodeAt(truncated.length - 1) <= 0xdbff
+  ) {
+    truncated = truncated.slice(0, -1)
+  }
   const body =
-    full.length > maxBody
-      ? full.slice(0, maxBody) + '\n…(truncated; full report on your clipboard)'
-      : full
+    full.length > maxBody ? truncated + '\n…(truncated; full report on your clipboard)' : full
   const subject = `Sitcord error: ${report.title}`
   return `mailto:${SUBMIT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }

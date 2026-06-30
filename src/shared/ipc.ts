@@ -57,5 +57,6 @@ export const IPC = {
   RETRY_CONNECTION: 'discord:retry',
   // Critical-error channel: main pushes a report; renderer submits one back.
   ERROR_REPORT: 'error:report',
-  ERROR_SUBMIT: 'error:submit'
+  ERROR_SUBMIT: 'error:submit',
+  ERROR_DISMISS: 'error:dismiss'
 } as const
