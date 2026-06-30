@@ -24,6 +24,23 @@ export interface UpdateStatus {
   updateAvailable: boolean
 }
 
+// A single critical error surfaced to the user in the error drawer and, on
+// submit, sent to us. category drives the headline; context is self-contained
+// so a report needs no extra lookup.
+export interface ErrorReport {
+  id: string
+  category: 'connection' | 'controller' | 'unknown'
+  title: string
+  message: string
+  stack?: string
+  context: {
+    version: string
+    platform: string
+    [key: string]: unknown
+  }
+  timestamp: number
+}
+
 export const IPC = {
   STATE_UPDATE: 'state:update',
   UPDATE_STATUS: 'update:status',
@@ -37,5 +54,8 @@ export const IPC = {
   WINDOW_TOGGLE: 'window:toggle',
   WINDOW_MINIMIZE: 'window:minimize',
   LAUNCH_DISCORD: 'discord:launch',
-  RETRY_CONNECTION: 'discord:retry'
+  RETRY_CONNECTION: 'discord:retry',
+  // Critical-error channel: main pushes a report; renderer submits one back.
+  ERROR_REPORT: 'error:report',
+  ERROR_SUBMIT: 'error:submit'
 } as const
