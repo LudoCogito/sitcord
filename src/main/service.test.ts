@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { DiscordService, type RpcConnection, type ServiceStore } from './service'
-import type { AppState } from '../shared/ipc'
+import type { AppState, ErrorReport } from '../shared/ipc'
 import type { AuthData } from './store'
 import type { Store as RankingStore, UsageEntry } from './ranking'
 
@@ -91,7 +91,8 @@ const responses = {
 
 function makeService(
   states: AppState[],
-  store: MemoryStore
+  store: MemoryStore,
+  errors: ErrorReport[] = []
 ): { service: DiscordService; rpc: FakeRpc } {
   const rpc = new FakeRpc(responses)
   const service = new DiscordService({
@@ -100,6 +101,8 @@ function makeService(
     clientId: 'cid',
     clientSecret: 'secret',
     onStateUpdate: (s) => states.push(s),
+    onError: (r) => errors.push(r),
+    appContext: { version: 'test', platform: 'test' },
     now: () => 0
   })
   return { service, rpc }
@@ -285,6 +288,8 @@ describe('DiscordService', () => {
       clientId: 'cid',
       clientSecret: 'secret',
       onStateUpdate: (s) => states.push(s),
+      onError: () => {},
+      appContext: { version: 'test', platform: 'test' },
       now: () => 0
     })
     await service.start()
@@ -321,6 +326,8 @@ describe('DiscordService', () => {
       clientId: 'cid',
       clientSecret: 'secret',
       onStateUpdate: (s) => states.push(s),
+      onError: () => {},
+      appContext: { version: 'test', platform: 'test' },
       now: () => 0
     })
     await service.start()
@@ -357,6 +364,96 @@ describe('DiscordService', () => {
     expect(outputCall?.args).toEqual({ output: { volume: 200 } })
     expect(states.at(-1)?.inputVolume).toBe(72)
     expect(states.at(-1)?.outputVolume).toBe(200)
+  })
+
+  it('emits a connection ErrorReport when setupSession fails after connect', async () => {
+    const states: AppState[] = []
+    const errors: ErrorReport[] = []
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
+    const rpc = new FakeRpc({
+      ...responses,
+      AUTHENTICATE: () => {
+        throw new Error('OAuth2 Error: invalid_scope')
+      }
+    })
+    const service = new DiscordService({
+      rpc,
+      store,
+      clientId: 'cid',
+      clientSecret: 'secret',
+      onStateUpdate: (s) => states.push(s),
+      onError: (r) => errors.push(r),
+      appContext: { version: 'test', platform: 'test' },
+      now: () => 0
+    })
+
+    await service.start()
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0].category).toBe('connection')
+    expect(errors[0].message).toContain('invalid_scope')
+    expect(states.at(-1)?.status).toBe('disconnected')
+  })
+
+  it('does NOT emit an ErrorReport when the initial socket connect fails', async () => {
+    const states: AppState[] = []
+    const errors: ErrorReport[] = []
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
+    const rpc = new FakeRpc(responses)
+    rpc.connect = async () => {
+      throw new Error('ENOENT: discord not running')
+    }
+    const service = new DiscordService({
+      rpc,
+      store,
+      clientId: 'cid',
+      clientSecret: 'secret',
+      onStateUpdate: (s) => states.push(s),
+      onError: (r) => errors.push(r),
+      appContext: { version: 'test', platform: 'test' },
+      now: () => 0
+    })
+
+    await service.start()
+
+    expect(errors).toHaveLength(0)
+    expect(states.at(-1)?.status).toBe('disconnected')
+  })
+
+  it('does NOT emit an ErrorReport when a user-action RPC command rejects', async () => {
+    const states: AppState[] = []
+    const errors: ErrorReport[] = []
+    const store = new MemoryStore(
+      { accessToken: 'tok', expiresAt: Infinity },
+      { favorites: [], usage: {} }
+    )
+    const rpc = new FakeRpc({
+      ...responses,
+      SELECT_VOICE_CHANNEL: () => {
+        throw new Error('rejected join')
+      }
+    })
+    const service = new DiscordService({
+      rpc,
+      store,
+      clientId: 'cid',
+      clientSecret: 'secret',
+      onStateUpdate: (s) => states.push(s),
+      onError: (r) => errors.push(r),
+      appContext: { version: 'test', platform: 'test' },
+      now: () => 0
+    })
+    await service.start()
+
+    await service.join('c1').catch(() => {})
+
+    expect(errors).toHaveLength(0)
   })
 
   it('VOICE_CHANNEL_SELECT updates currentChannelId and refreshes occupancy after a debounce', async () => {

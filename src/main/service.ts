@@ -9,7 +9,9 @@ import {
 } from './ranking'
 import { recordJoin, toggleFavorite } from './store-logic'
 import { clampVolume } from '../shared/volume'
-import type { AppState, ConnectionStatus } from '../shared/ipc'
+import { randomUUID } from 'node:crypto'
+import { buildErrorReport } from '../shared/error-report'
+import type { AppState, ConnectionStatus, ErrorReport } from '../shared/ipc'
 
 export interface RpcConnection extends EventEmitter, RpcRequester {
   connect(): Promise<void>
@@ -31,6 +33,11 @@ export interface DiscordServiceOptions {
   // Optional: omitted for a public (PKCE) client build.
   clientSecret?: string
   onStateUpdate: (state: AppState) => void
+  // Critical errors (auth/session setup failures) for the error drawer. Optional
+  // so tests and the initial wiring can omit it.
+  onError?: (report: ErrorReport) => void
+  // Baked into every report's context so it's self-contained.
+  appContext?: { version: string; platform: string }
   now?: () => number
 }
 
@@ -42,6 +49,8 @@ export class DiscordService {
   private readonly store: ServiceStore
   private readonly auth: AuthManager
   private readonly onStateUpdate: (state: AppState) => void
+  private readonly onError?: (report: ErrorReport) => void
+  private readonly appContext: { version: string; platform: string }
   private readonly now: () => number
 
   private channels: VoiceChannel[] = []
@@ -69,6 +78,8 @@ export class DiscordService {
     this.store = options.store
     this.now = options.now ?? Date.now
     this.onStateUpdate = options.onStateUpdate
+    this.onError = options.onError
+    this.appContext = options.appContext ?? { version: 'unknown', platform: 'unknown' }
     this.auth = new AuthManager({
       rpc: this.rpc,
       store: this.store,
@@ -103,6 +114,15 @@ export class DiscordService {
       console.error('[sitcord] setupSession failed:', err)
       this.status = 'disconnected'
       this.statusDetail = err instanceof Error ? err.message : String(err)
+      this.onError?.(
+        buildErrorReport(
+          err,
+          'connection',
+          { ...this.appContext, phase: 'setup' },
+          this.now(),
+          randomUUID()
+        )
+      )
       this.pushState()
     } finally {
       this.resolveFirstSetup?.()
