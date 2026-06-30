@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildErrorReport } from './error-report'
+import { buildErrorReport, formatReportText, buildMailtoUrl } from './error-report'
 
 const ctx = { version: '0.1.3', platform: 'darwin' }
 
@@ -28,5 +28,39 @@ describe('buildErrorReport', () => {
   it('uses the generic title for the unknown category', () => {
     const report = buildErrorReport(new Error('x'), 'unknown', ctx, 0, 'id-3')
     expect(report.title).toBe('Something went wrong')
+  })
+})
+
+describe('formatReportText', () => {
+  it('includes title, message, stack, version and platform', () => {
+    const report = buildErrorReport(new Error('kaboom'), 'connection', ctx, 0, 'id')
+    const text = formatReportText(report)
+
+    expect(text).toContain("Couldn't connect to Discord")
+    expect(text).toContain('kaboom')
+    expect(text).toContain('0.1.3')
+    expect(text).toContain('darwin')
+    expect(text).toContain(report.stack as string)
+  })
+})
+
+describe('buildMailtoUrl', () => {
+  it('targets bug@sitcord.com with a url-encoded subject and body', () => {
+    const report = buildErrorReport(new Error('kaboom'), 'connection', ctx, 0, 'id')
+    const url = buildMailtoUrl(report)
+
+    expect(url.startsWith('mailto:bug@sitcord.com?subject=')).toBe(true)
+    expect(url).toContain('&body=')
+    expect(decodeURIComponent(url.split('&body=')[1])).toContain('kaboom')
+  })
+
+  it('truncates an over-long body and marks it', () => {
+    const big = new Error('x'.repeat(5000))
+    const report = buildErrorReport(big, 'unknown', ctx, 0, 'id')
+    const url = buildMailtoUrl(report, 200)
+    const body = decodeURIComponent(url.split('&body=')[1])
+
+    expect(body).toContain('truncated; full report on your clipboard')
+    expect(body.length).toBeLessThan(300)
   })
 })
