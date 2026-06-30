@@ -14,6 +14,7 @@ import {
 import { updateIndicator } from './update-indicator'
 import { stepVolume, VOLUME_RANGES, type VolumeTarget } from '../shared/volume'
 import type { AppState, UpdateStatus, ErrorReport } from '../shared/ipc'
+import { buildErrorReport } from '../shared/error-report'
 
 // Root font size at scale 1.0; the rem-based stylesheet scales off this so the
 // whole UI grows/shrinks together for 10-foot/Big Picture viewing.
@@ -212,8 +213,8 @@ function wireHeaderDrag(el: HTMLElement, guildId: string): void {
 // controller-focusable: UP/DOWN move between them, A activates the highlighted
 // one.
 const MENU_ITEMS: { label: string; run: () => void }[] = [
-  { label: 'Launch Discord', run: () => void window.api.launchDiscord() },
-  { label: 'Retry connection', run: () => void window.api.retryConnection() }
+  { label: 'Launch Discord', run: () => void window.api.launchDiscord().catch(() => {}) },
+  { label: 'Retry connection', run: () => void window.api.retryConnection().catch(() => {}) }
 ]
 
 function channelCount(s: AppState): number {
@@ -351,15 +352,20 @@ function renderRow(row: Row): HTMLElement {
       g.x,
       state.muted ? 'Unmute' : 'Mute',
       '',
-      () => void window.api.setMute(!state.muted)
+      () => void window.api.setMute(!state.muted).catch(() => {})
     )
     const deafenBtn = rowButton(
       g.y,
       state.deafened ? 'Undeafen' : 'Deafen',
       '',
-      () => void window.api.setDeafen(!state.deafened)
+      () => void window.api.setDeafen(!state.deafened).catch(() => {})
     )
-    const leaveBtn = rowButton(g.b, 'Leave', 'row-btn--leave', () => void window.api.disconnect())
+    const leaveBtn = rowButton(
+      g.b,
+      'Leave',
+      'row-btn--leave',
+      () => void window.api.disconnect().catch(() => {})
+    )
 
     controls.append(muteBtn, deafenBtn, leaveBtn)
     el.appendChild(controls)
@@ -475,8 +481,8 @@ function volumeControl(target: VolumeTarget, hint: string, value: number): HTMLE
   icon.title = label
   icon.setAttribute('aria-label', label)
   icon.addEventListener('click', () => {
-    if (target === 'input') void window.api.setMute(!state.muted)
-    else void window.api.setDeafen(!state.deafened)
+    if (target === 'input') void window.api.setMute(!state.muted).catch(() => {})
+    else void window.api.setDeafen(!state.deafened).catch(() => {})
   })
 
   const slider = document.createElement('input')
@@ -503,7 +509,7 @@ function volumeControl(target: VolumeTarget, hint: string, value: number): HTMLE
   slider.addEventListener('input', () => {
     const v = Number(slider.value)
     readout.textContent = String(v)
-    void send(v)
+    void send(v).catch(() => {})
   })
 
   row.append(icon, slider, readout, hintEl)
@@ -689,6 +695,16 @@ function submitCurrentError(): void {
   closeError()
 }
 
+// Context for a renderer-originated report. version comes from the update
+// status push (may be '' before it arrives); platform from the user agent.
+function rendererContext(): ErrorReport['context'] {
+  return { version: updateStatus.version || 'unknown', platform: navigator.userAgent }
+}
+
+function reportLocalError(err: unknown, category: ErrorReport['category']): void {
+  showError(buildErrorReport(err, category, rendererContext(), Date.now(), crypto.randomUUID()))
+}
+
 function renderMenu(): HTMLElement {
   const wrap = document.createElement('div')
   wrap.className = 'menu'
@@ -783,7 +799,7 @@ function render(): void {
       // primary mouse action for a voice switcher.
       el.addEventListener('click', () => {
         selectionIndex = index
-        void window.api.join(channelId)
+        void window.api.join(channelId).catch(() => {})
         render()
       })
     }
@@ -866,10 +882,10 @@ function handleAction(action: InputAction): void {
         applyScale()
         return
       case 'toggleVisibility':
-        void window.api.toggleVisibility()
+        void window.api.toggleVisibility().catch(() => {})
         return
       case 'minimize':
-        void window.api.minimize()
+        void window.api.minimize().catch(() => {})
         return
       default:
         return
@@ -906,10 +922,10 @@ function handleAction(action: InputAction): void {
         applyScale()
         return
       case 'toggleVisibility':
-        void window.api.toggleVisibility()
+        void window.api.toggleVisibility().catch(() => {})
         return
       case 'minimize':
-        void window.api.minimize()
+        void window.api.minimize().catch(() => {})
         return
       default:
         return
@@ -930,18 +946,18 @@ function handleAction(action: InputAction): void {
         toggleCollapse(row.guildId)
         render()
       } else if (row?.kind === 'channel') {
-        void window.api.join(row.channelId)
+        void window.api.join(row.channelId).catch(() => {})
       }
       break
     }
     case 'disconnect':
-      void window.api.disconnect()
+      void window.api.disconnect().catch(() => {})
       break
     case 'toggleMute':
-      void window.api.setMute(!state.muted)
+      void window.api.setMute(!state.muted).catch(() => {})
       break
     case 'toggleDeafen':
-      void window.api.setDeafen(!state.deafened)
+      void window.api.setDeafen(!state.deafened).catch(() => {})
       break
     case 'pickup': {
       // Long-press A on a server header picks it up for reordering; on a channel
@@ -951,20 +967,20 @@ function handleAction(action: InputAction): void {
         reorderingGuildId = row.guildId
         render()
       } else if (row?.kind === 'channel') {
-        void window.api.join(row.channelId)
+        void window.api.join(row.channelId).catch(() => {})
       }
       break
     }
     case 'toggleFavorite': {
       const row = selectedRow()
-      if (row?.kind === 'channel') void window.api.toggleFavorite(row.channelId)
+      if (row?.kind === 'channel') void window.api.toggleFavorite(row.channelId).catch(() => {})
       break
     }
     case 'toggleVisibility':
-      void window.api.toggleVisibility()
+      void window.api.toggleVisibility().catch(() => {})
       break
     case 'minimize':
-      void window.api.minimize()
+      void window.api.minimize().catch(() => {})
       break
     case 'zoom':
       scale = adjustScale(scale, action.direction)
@@ -973,8 +989,8 @@ function handleAction(action: InputAction): void {
     case 'adjustVolume': {
       const current = action.target === 'input' ? state.inputVolume : state.outputVolume
       const next = stepVolume(current, action.direction, action.target)
-      if (action.target === 'input') void window.api.setInputVolume(next)
-      else void window.api.setOutputVolume(next)
+      if (action.target === 'input') void window.api.setInputVolume(next).catch(() => {})
+      else void window.api.setOutputVolume(next).catch(() => {})
       break
     }
   }
@@ -1012,8 +1028,19 @@ window.addEventListener('pointerup', () => {
   render()
 })
 
-startGamepadLoop(handleAction)
-startKeyboardFallback(handleAction)
+startGamepadLoop(handleAction, (err) => reportLocalError(err, 'controller'))
+startKeyboardFallback(handleAction, (err) => reportLocalError(err, 'controller'))
+
+// Uncaught UI exceptions are real crashes → surface them. Recoverable promise
+// rejections (e.g. a single rejected voice command) are logged, never surfaced
+// (per the critical-only rule): swallow them so they don't become noise.
+window.addEventListener('error', (event) =>
+  reportLocalError(event.error ?? event.message, 'unknown')
+)
+window.addEventListener('unhandledrejection', (event) => {
+  event.preventDefault()
+  console.warn('Recoverable rejection (not surfaced):', event.reason)
+})
 
 // Re-render so the legend adopts the glyphs of whatever just (dis)connected.
 window.addEventListener('gamepadconnected', render)
